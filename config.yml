@@ -1,0 +1,7 @@
+source:
+  type: stdin
+  service: kotik-api
+
+sink:
+  type: stdout
+  pretty: true
