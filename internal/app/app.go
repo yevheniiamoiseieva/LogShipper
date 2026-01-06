@@ -48,31 +48,67 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
-
-	var src pipeline.Source
-
-	switch a.cfg.Source.Type {
-	case "stdin":
-		src = &sources.StdinSource{
-			Service: a.cfg.Source.Service,
+	var allSources []pipeline.Source
+	var sink pipeline.Sink
+	var trans pipeline.Transformer
+	for name, sCfg := range a.cfg.Sources {
+		log.Printf("initializing source: %s (type: %s)", name, sCfg.Type)
+		switch sCfg.Type {
+		case "stdin":
+			allSources = append(allSources, &sources.StdinSource{
+				Service: sCfg.Service,
+			})
+		case "file":
+			allSources = append(allSources, &sources.FileSource{
+				Service: sCfg.Service,
+				Path:    sCfg.Path,
+			})
+		case "docker":
+			allSources = append(allSources, &sources.DockerSource{
+				Service:     sCfg.Service,
+				ContainerID: sCfg.ContainerID,
+			})
+		default:
+			return nil, fmt.Errorf("unknown source type: %s", sCfg.Type)
 		}
-	default:
-		return nil, fmt.Errorf("unknown source type: %s", a.cfg.Source.Type)
 	}
 
-	var sink pipeline.Sink
-
-	switch a.cfg.Sink.Type {
-	case "stdout":
-		sink = &sinks.StdoutSink{
-			Pretty: a.cfg.Sink.Pretty,
+	for name, tCfg := range a.cfg.Transforms {
+		log.Printf("initializing transform: %s", name)
+		switch tCfg.Type {
+		case "remap-lite":
+			trans = &pipeline.RemapTransform{
+				AddFields: tCfg.AddFields,
+			}
+		default:
+			return nil, fmt.Errorf("unknown transform type: %s", tCfg.Type)
 		}
-	default:
-		return nil, fmt.Errorf("unknown sink type: %s", a.cfg.Sink.Type)
+		break
+	}
+
+	for name, snkCfg := range a.cfg.Sinks {
+		log.Printf("initializing sink: %s", name)
+		switch snkCfg.Type {
+		case "stdout":
+			sink = &sinks.StdoutSink{
+				Pretty: snkCfg.Pretty,
+			}
+		default:
+			return nil, fmt.Errorf("unknown sink type: %s", snkCfg.Type)
+		}
+		break
+	}
+
+	if len(allSources) == 0 {
+		return nil, fmt.Errorf("no sources defined in config")
+	}
+	if sink == nil {
+		return nil, fmt.Errorf("no sinks defined in config")
 	}
 
 	return &pipeline.Pipeline{
-		Source: src,
-		Sink:   sink,
+		Sources:   allSources,
+		Transform: trans,
+		Sink:      sink,
 	}, nil
 }

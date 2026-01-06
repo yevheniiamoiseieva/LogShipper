@@ -3,9 +3,8 @@ package sinks
 import (
 	"context"
 	"encoding/json"
-	"os"
-
 	"collector/internal/event"
+	"os"
 )
 
 type StdoutSink struct {
