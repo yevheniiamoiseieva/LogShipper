@@ -29,11 +29,17 @@ func (s *StdinSource) Run(ctx context.Context, out chan<- event.Event) error {
 
 		line := reader.Text()
 
-		out <- event.Event{
+		evt := event.Event{
 			Timestamp: time.Now().UTC(),
 			Source:    "stdin",
 			Service:   s.Service,
 			Message:   line,
+		}
+
+		select {
+		case out <- evt:
+		case <-ctx.Done():
+			return nil
 		}
 	}
 }

@@ -24,56 +24,59 @@ func (ds *DockerSource) Run(ctx context.Context, out chan<- event.Event) error {
 		return err
 	}
 
+	log.Printf("docker source started for container: %s", ds.ContainerID)
+
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+		Timestamps: false,
+	}
+
+	reader, err := cli.ContainerLogs(ctx, ds.ContainerID, options)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	pipeR, pipeW := io.Pipe()
+	defer pipeR.Close()
+
 	go func() {
-		log.Printf("docker source started for container: %s", ds.ContainerID)
-
-		options := container.LogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-			Timestamps: false,
-		}
-
-		reader, err := cli.ContainerLogs(ctx, ds.ContainerID, options)
-		if err != nil {
-			log.Printf("docker logs error: %v", err)
-			return
-		}
-		defer reader.Close()
-
-		stdoutReader, stdoutWriter := io.Pipe()
-
-		go func() {
-			_, err := stdcopy.StdCopy(stdoutWriter, stdoutWriter, reader)
-			stdoutWriter.CloseWithError(err)
-		}()
-
-		scanner := bufio.NewScanner(stdoutReader)
-		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				msg := scanner.Text()
-				if msg == "" {
-					continue
-				}
-
-				out <- event.Event{
-					Timestamp: time.Now(),
-					Source:    "docker",
-					Service:   ds.Service,
-					Message:   msg,
-					Level:     "info",
-					Attrs:     map[string]any{"container_id": ds.ContainerID},
-				}
-			}
-		}
-
-		if err := scanner.Err(); err != nil && err != context.Canceled {
-			log.Printf("docker scanner error: %v", err)
-		}
+		_, err := stdcopy.StdCopy(pipeW, pipeW, reader)
+		_ = pipeW.CloseWithError(err)
 	}()
+
+	scanner := bufio.NewScanner(pipeR)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		msg := scanner.Text()
+		if msg == "" {
+			continue
+		}
+
+		e := event.Event{
+			Timestamp: time.Now().UTC(),
+			Source:    "docker",
+			Service:   ds.Service,
+			Message:   msg,
+			Level:     "info",
+			Attrs:     map[string]any{"container_id": ds.ContainerID},
+		}
+
+		select {
+		case out <- e:
+		case <-ctx.Done():
+			log.Printf("docker source stopping for container: %s", ds.ContainerID)
+			return nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil && err != context.Canceled {
+		return err
+	}
 
 	return nil
 }

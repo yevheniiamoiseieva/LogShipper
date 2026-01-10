@@ -23,42 +23,39 @@ func (fs *FileSource) Run(ctx context.Context, out chan<- event.Event) error {
 	if err != nil {
 		return err
 	}
+	defer t.Stop()
 
-	go func() {
-		log.Printf("file source started for path: %s", fs.Path)
+	log.Printf("file source started for path: %s", fs.Path)
 
-		for {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("file source stopping for path: %s", fs.Path)
+			return nil
+
+		case line, ok := <-t.Lines:
+			if !ok {
+				return nil
+			}
+			if line.Err != nil {
+				log.Printf("tail line error: %v", line.Err)
+				continue
+			}
+
+			e := event.Event{
+				Timestamp: time.Now().UTC(),
+				Source:    "file",
+				Service:   fs.Service,
+				Message:   line.Text,
+				Level:     "info",
+				Attrs:     map[string]any{"path": fs.Path},
+			}
+
 			select {
+			case out <- e:
 			case <-ctx.Done():
-				log.Printf("file source stopping for path: %s", fs.Path)
-				t.Stop()
-				return
-			case line, ok := <-t.Lines:
-				if !ok {
-					return
-				}
-				if line.Err != nil {
-					log.Printf("tail line error: %v", line.Err)
-					continue
-				}
-
-				e := event.Event{
-					Timestamp: time.Now(),
-					Source:    "file",
-					Service:   fs.Service,
-					Message:   line.Text,
-					Level:     "info",
-					Attrs:     make(map[string]any),
-				}
-
-				select {
-				case <-ctx.Done():
-					return
-				case out <- e:
-				}
+				return nil
 			}
 		}
-	}()
-
-	return nil
+	}
 }
