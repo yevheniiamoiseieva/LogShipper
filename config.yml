@@ -14,6 +14,7 @@ transforms:
   add_metadata:
     type: "remap-lite"
     inputs: ["stdin_main", "app_file", "docker_container"]
+    case: "camel"
     add_fields:
       env: "${APP_ENV}"
       node: "${NODE_NAME}"

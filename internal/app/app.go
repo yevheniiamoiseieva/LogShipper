@@ -10,6 +10,7 @@ import (
 	"collector/internal/pipeline"
 	"collector/internal/sinks"
 	"collector/internal/sources"
+	"collector/internal/transform"
 )
 
 type App struct {
@@ -51,6 +52,7 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 	var allSources []pipeline.Source
 	var sink pipeline.Sink
 	var trans pipeline.Transformer
+
 	for name, sCfg := range a.cfg.Sources {
 		log.Printf("initializing source: %s (type: %s)", name, sCfg.Type)
 		switch sCfg.Type {
@@ -77,8 +79,9 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 		log.Printf("initializing transform: %s", name)
 		switch tCfg.Type {
 		case "remap-lite":
-			trans = &pipeline.RemapTransform{
+			trans = &transform.RemapTransform{
 				AddFields: tCfg.AddFields,
+				Case:      tCfg.Case,
 			}
 		default:
 			return nil, fmt.Errorf("unknown transform type: %s", tCfg.Type)

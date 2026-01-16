@@ -17,6 +17,7 @@ type TransformConfig struct {
 	Type      string            `yaml:"type"`
 	Inputs    []string          `yaml:"inputs"`
 	AddFields map[string]string `yaml:"add_fields"`
+	Case      string            `yaml:"case,omitempty"`
 }
 
 type SinkConfig struct {
