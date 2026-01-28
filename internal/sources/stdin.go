@@ -33,6 +33,7 @@ func (s *StdinSource) Run(ctx context.Context, out chan<- event.Event) error {
 			Timestamp: time.Now().UTC(),
 			Source:    "stdin",
 			Service:   s.Service,
+			Type:      event.TypeLog,
 			Message:   line,
 		}
 

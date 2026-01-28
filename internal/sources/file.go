@@ -46,9 +46,11 @@ func (fs *FileSource) Run(ctx context.Context, out chan<- event.Event) error {
 				Timestamp: time.Now().UTC(),
 				Source:    "file",
 				Service:   fs.Service,
-				Message:   line.Text,
-				Level:     "info",
-				Attrs:     map[string]any{"path": fs.Path},
+				Type:      event.TypeLog,
+
+				Message: line.Text,
+				Level:   "info",
+				Attrs:   map[string]any{"path": fs.Path},
 			}
 
 			select {

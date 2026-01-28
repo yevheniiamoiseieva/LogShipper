@@ -5,10 +5,12 @@ sources:
   app_file:
     type: "file"
     path: "file.log"
+    service: "${SERVICE_NAME}"
   docker_container:
     type: "docker"
     container_id: "test_container"
     service: "docker-service"
+
 
 transforms:
   add_metadata:
@@ -23,4 +25,4 @@ sinks:
   stdout_final:
     type: "stdout"
     inputs: ["add_metadata"]
-    pretty: ${DEBUG_PRETTY:-false}
+    pretty: ${DEBUG_PRETTY}

@@ -58,9 +58,11 @@ func (ds *DockerSource) Run(ctx context.Context, out chan<- event.Event) error {
 		}
 
 		e := event.Event{
+			Type: event.TypeLog,
 			Timestamp: time.Now().UTC(),
 			Source:    "docker",
 			Service:   ds.Service,
+
 			Message:   msg,
 			Level:     "info",
 			Attrs:     map[string]any{"container_id": ds.ContainerID},

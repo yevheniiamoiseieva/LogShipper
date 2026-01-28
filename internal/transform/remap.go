@@ -24,18 +24,24 @@ func (t *RemapTransform) Run(ctx context.Context, in <-chan event.Event, out cha
 			evt.Attrs[k] = v
 		}
 
-		switch t.Case {
-		case "upper":
-			evt.Message = strings.ToUpper(evt.Message)
-		case "lower":
-			evt.Message = strings.ToLower(evt.Message)
-		case "snake":
-			evt.Message = toSnakeCase(evt.Message)
-		case "camel":
-			evt.Message = toCamelCase(evt.Message)
+		if evt.Type == event.TypeLog {
+			switch t.Case {
+			case "upper":
+				evt.Message = strings.ToUpper(evt.Message)
+			case "lower":
+				evt.Message = strings.ToLower(evt.Message)
+			case "snake":
+				evt.Message = toSnakeCase(evt.Message)
+			case "camel":
+				evt.Message = toCamelCase(evt.Message)
+			}
 		}
 
-		out <- evt
+		select {
+		case out <- evt:
+		case <-ctx.Done():
+			return nil
+		}
 	}
 	return nil
 }

@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync"
 
 	"collector/internal/event"
@@ -27,17 +29,36 @@ type Pipeline struct {
 }
 
 func (p *Pipeline) Run(ctx context.Context) error {
+	if len(p.Sources) == 0 {
+		return fmt.Errorf("pipeline: no sources provided")
+	}
+	if p.Sink == nil {
+		return fmt.Errorf("pipeline: no sink provided")
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	sourceChan := make(chan event.Event, 100)
 	parsedChan := make(chan event.Event, 100)
 	sinkChan := make(chan event.Event, 100)
 
+	errCh := make(chan error, 8)
 	var wg sync.WaitGroup
+
 	for _, src := range p.Sources {
+		s := src
 		wg.Add(1)
-		go func(s Source) {
+		go func() {
 			defer wg.Done()
-			s.Run(ctx, sourceChan)
-		}(src)
+			if err := s.Run(ctx, sourceChan); err != nil && err != context.Canceled {
+				select {
+				case errCh <- err:
+				default:
+				}
+				cancel()
+			}
+		}()
 	}
 
 	go func() {
@@ -46,23 +67,76 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	}()
 
 	go func() {
-		for evt := range sourceChan {
-			parse.ParseJSON(&evt)
-			parsedChan <- evt
+		defer close(parsedChan)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case evt, ok := <-sourceChan:
+				if !ok {
+					return
+				}
+
+				parse.ParseJSON(&evt)
+
+				select {
+				case parsedChan <- evt:
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
-		close(parsedChan)
 	}()
 
 	go func() {
-		if p.Transform != nil {
-			p.Transform.Run(ctx, parsedChan, sinkChan)
-		} else {
-			for evt := range parsedChan {
-				sinkChan <- evt
+		defer close(sinkChan)
+
+		if p.Transform == nil {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case evt, ok := <-parsedChan:
+					if !ok {
+						return
+					}
+					select {
+					case sinkChan <- evt:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
 		}
-		close(sinkChan)
+
+		if err := p.Transform.Run(ctx, parsedChan, sinkChan); err != nil && err != context.Canceled {
+			select {
+			case errCh <- err:
+			default:
+			}
+			cancel()
+			return
+		}
 	}()
 
-	return p.Sink.Run(ctx, sinkChan)
+	sinkErr := p.Sink.Run(ctx, sinkChan)
+	if sinkErr != nil && sinkErr != context.Canceled {
+		select {
+		case errCh <- sinkErr:
+		default:
+		}
+		cancel()
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil && err != context.Canceled {
+			log.Printf("pipeline stopped with error: %v", err)
+			return err
+		}
+	default:
+	}
+
+	return sinkErr
 }
