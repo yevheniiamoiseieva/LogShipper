@@ -78,7 +78,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 					return
 				}
 
-				parse.ParseJSON(&evt)
+				parse.ParseEvent(&evt)
 
 				select {
 				case parsedChan <- evt:
