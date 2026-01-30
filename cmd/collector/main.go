@@ -9,9 +9,15 @@ import (
 
 	"collector/internal/app"
 	"collector/internal/config"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("Note: .env file not found, using system environment variables")
+	}
+
 	configPath := flag.String("c", "", "path to config file")
 	flag.Parse()
 
