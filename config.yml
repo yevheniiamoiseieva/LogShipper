@@ -1,7 +1,28 @@
-source:
-  type: stdin
-  service: kotik-api
+sources:
+  stdin_main:
+    type: "stdin"
+    service: "${SERVICE_NAME}"
+  app_file:
+    type: "file"
+    path: "file.log"
+    service: "${SERVICE_NAME}"
+  docker_container:
+    type: "docker"
+    container_id: "test_container"
+    service: "docker-service"
 
-sink:
-  type: stdout
-  pretty: true
+
+transforms:
+  add_metadata:
+    type: "remap-lite"
+    inputs: ["stdin_main", "app_file", "docker_container"]
+    case: "camel"
+    add_fields:
+      env: "${APP_ENV}"
+      node: "${NODE_NAME}"
+
+sinks:
+  stdout_final:
+    type: "stdout"
+    inputs: ["add_metadata"]
+    pretty: ${DEBUG_PRETTY}
