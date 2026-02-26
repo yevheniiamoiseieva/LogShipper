@@ -31,7 +31,7 @@ func TestRemapTransform_Run(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			in <- event.Event{Message: tt.input}
+			in <- event.Event{Message: tt.input, Type: event.TypeLog}
 			close(in)
 
 			go tr.Run(ctx, in, out)
