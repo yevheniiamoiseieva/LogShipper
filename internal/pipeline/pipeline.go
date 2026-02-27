@@ -8,18 +8,17 @@ import (
 
 	"collector/internal/event"
 	"collector/internal/parse"
+	"collector/internal/resolve"
 )
 
 type Source interface {
 	Run(ctx context.Context, out chan<- event.Event) error
 }
 
-// normalizedSink is the preferred sink interface, consuming *event.NormalizedEvent.
 type NormalizedSink interface {
 	Run(ctx context.Context, in <-chan *event.NormalizedEvent) error
 }
 
-// sink is the legacy interface, kept for backward compatibility.
 type Sink interface {
 	Run(ctx context.Context, in <-chan event.Event) error
 }
@@ -31,8 +30,9 @@ type Transformer interface {
 type Pipeline struct {
 	Sources        []Source
 	Transform      Transformer
-	Sink           Sink           // legacy
-	NormalizedSink NormalizedSink // preferred
+	Sink           Sink
+	NormalizedSink NormalizedSink
+	Resolver       resolve.Resolver // optional, enriches DstService/SrcService
 }
 
 func (p *Pipeline) Run(ctx context.Context) error {
@@ -54,7 +54,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	errCh := make(chan error, 8)
 	var wg sync.WaitGroup
 
-	// sources
 	for _, src := range p.Sources {
 		s := src
 		wg.Add(1)
@@ -74,7 +73,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		close(sourceChan)
 	}()
 
-	// parse
 	go func() {
 		defer close(parsedChan)
 		for {
@@ -95,7 +93,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	}()
 
-	// transform (optional)
 	transformedChan := parsedChan
 	if p.Transform != nil {
 		tc := make(chan event.Event, 100)
@@ -112,7 +109,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		transformedChan = tc
 	}
 
-	// normalize
 	go func() {
 		defer close(normalChan)
 		if p.NormalizedSink == nil {
@@ -141,8 +137,10 @@ func (p *Pipeline) Run(ctx context.Context) error {
 				if !ok {
 					return
 				}
+				n := event.Normalize(&evt)
+				p.resolve(ctx, n)
 				select {
-				case normalChan <- event.Normalize(&evt):
+				case normalChan <- n:
 				case <-ctx.Done():
 					return
 				}
@@ -150,7 +148,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	}()
 
-	// sink
 	var sinkErr error
 	if p.NormalizedSink != nil {
 		sinkErr = p.NormalizedSink.Run(ctx, normalChan)
@@ -175,4 +172,21 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	default:
 	}
 	return sinkErr
+}
+
+// resolve enriches DstService and SrcService using the configured Resolver.
+func (p *Pipeline) resolve(ctx context.Context, n *event.NormalizedEvent) {
+	if p.Resolver == nil {
+		return
+	}
+	if n.DstService != "" {
+		if svc, ok := p.Resolver.Resolve(ctx, n.DstService); ok {
+			n.DstService = svc
+		}
+	}
+	if n.SrcService == "" {
+		if svc, ok := p.Resolver.Resolve(ctx, n.SourceName); ok {
+			n.SrcService = svc
+		}
+	}
 }
