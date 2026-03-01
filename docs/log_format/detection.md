@@ -1,6 +1,5 @@
 # Format Auto-Detection
 
-`internal/parse/detect.go`
 
 The parser identifies the format of every incoming line automatically.
 No configuration is required. The algorithm runs per-line, in the order
