@@ -1,0 +1,57 @@
+# ── Plain syslog RFC 3164 ─────────────────────────────────────────────────────
+<34>Mar 15 08:01:02 web-01 nginx[8192]: 10.0.0.5 - alice [15/Mar/2024:08:01:02 +0000] "POST /api/v1/payments HTTP/1.1" 201 512
+<165>Mar 15 08:01:15 web-01 payment[1234]: Transaction tx-9821 authorised amount=199.99 currency=USD
+
+# ── Syslog RFC 5424 ───────────────────────────────────────────────────────────
+<34>1 2024-03-15T08:02:14.442Z worker-prod-3 user-service 9001 req-404 [request traceId="9d0e0e47364bf92f" userId="9999"] User not found
+<165>1 2024-03-15T08:02:46.310Z worker-prod-1 auth-service 1234 alert-001 [threat ip="10.0.0.31" attempts="3"] Brute force detected — IP blocked
+
+# ── Generic JSON — flat (Go slog) ─────────────────────────────────────────────
+{"time":"2024-03-15T08:03:01.000Z","level":"info","msg":"Order created","service":"order-service","order_id":"ORD-00499","user_id":4821,"total":312.50}
+
+# ── Generic JSON — numeric pino level ─────────────────────────────────────────
+{"level":50,"time":1710499385000,"pid":5678,"hostname":"worker-prod-2","msg":"DB query failed","query":"SELECT * FROM orders WHERE id=$1","error":"connection reset by peer"}
+
+# ── Generic JSON — missing timestamp (should fall back to time.Now()) ──────────
+{"level":"info","msg":"Config reloaded","service":"gateway","config_version":14}
+
+# ── Generic JSON — nested JSON string in message field (§5.4) ─────────────────
+{"time":"2024-03-15T08:03:45.120Z","level":"info","msg":"{\"trace_id\":\"4bf92f3577b34da6\",\"user_id\":4821,\"action\":\"checkout\"}","service":"audit-service"}
+
+# ── Mixed line: plain-text prefix + JSON suffix (§5.5) ────────────────────────
+2024-03-15 08:04:01,100 ERROR payment.processor Payment failed {"trace_id":"f3577b34da6a3ce9","amount":89.00,"gateway":"stripe","error":"timeout"}
+
+# ── Python logging — WARNING level (maps to warn) ─────────────────────────────
+2024-03-15 08:04:15,320 WARNING  auth.middleware  Token expires in 120s for user_id=4822
+2024-03-15 08:04:55,901 ERROR    payment.gateway  Stripe API returned 429 Too Many Requests
+2024-03-15 08:04:55,902 ERROR    payment.gateway  Retrying in 2s (attempt 2/3)
+
+# ── Python logging — multiline with traceback (§5 multi-line assembly) ─────────
+2024-03-15 08:05:10,441 ERROR    order.processor  Unhandled exception during order fulfilment
+Traceback (most recent call last):
+  File "/app/order/processor.py", line 142, in fulfil
+    result = payment_client.charge(order.total)
+  File "/app/clients/payment.py", line 88, in charge
+    raise PaymentError(f"gateway timeout: {resp.status_code}")
+order.exceptions.PaymentError: gateway timeout: 504
+
+# ── ECS — with trace context ──────────────────────────────────────────────────
+{"@timestamp":"2024-03-15T08:05:39.800Z","log.level":"debug","message":"Cache miss","service.name":"product-service","trace.id":"929d0e0e47364bf9","span.id":"2f3577b34da6a3ce","url.path":"/api/v1/products/9871"}
+
+# ── Prometheus metric lines ───────────────────────────────────────────────────
+# HELP http_requests_total Total HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{service="payment-service",method="POST",status="201"} 1027 1710499639000
+http_requests_total{service="payment-service",method="POST",status="500"} 14 1710499639000
+
+# ── Simple key=value metric ───────────────────────────────────────────────────
+queue_depth=42 queue=payments region=eu-west-1
+
+# ── Docker envelope wrapping plain-text inside ────────────────────────────────
+{"log":"2024-03-15 08:06:44,100 CRITICAL db.connection Connection pool exhausted after 30s\n","stream":"stderr","time":"2024-03-15T08:06:44.100334512Z"}
+
+# ── Completely unrecognised line (fallback path) ──────────────────────────────
+this line has no timestamp, no level, no structure — raw fallback message
+
+# ── Invalid UTF-8 bytes replaced with U+FFFD (§5.8) ─────────────────────────
+2024-03-15 08:07:01,500 WARN     encoding.reader  Received malformed payload from client ip=10.0.0.77

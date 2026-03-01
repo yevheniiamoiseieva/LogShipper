@@ -34,7 +34,9 @@ func ParseECS(evt *event.Event, raw map[string]any) {
 	}
 
 	if ts, ok := raw["@timestamp"].(string); ok {
-		if t, err := time.Parse(time.RFC3339, ts); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+			evt.Timestamp = t
+		} else if t, err := time.Parse(time.RFC3339, ts); err == nil {
 			evt.Timestamp = t
 		}
 	}
@@ -53,12 +55,109 @@ func ParseECS(evt *event.Event, raw map[string]any) {
 		}
 	}
 
+	if svc := ecsService(raw); svc != "" {
+		evt.Service = svc
+	}
+
 	applyTimestamp(evt, raw)
 
 	for k, v := range raw {
-		if k == "ts" || k == "time" || k == "@timestamp" || k == "message" || k == "msg" || k == "log.level" || k == "log" {
+		switch k {
+		case "ts", "time", "@timestamp", "message", "msg", "log.level", "log":
 			continue
 		}
 		evt.Attrs[k] = v
 	}
+}
+
+// ParseECSNormalized maps ECS fields into a NormalizedEvent.
+func ParseECSNormalized(raw map[string]any, sourceName string) *event.NormalizedEvent {
+	n := &event.NormalizedEvent{
+		Format:     "ecs_json",
+		SourceName: sourceName,
+		Raw:        raw,
+	}
+
+	if ts, ok := raw["@timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+			n.Timestamp = t.UTC()
+		} else if t, err := time.Parse(time.RFC3339, ts); err == nil {
+			n.Timestamp = t.UTC()
+		}
+	}
+	if n.Timestamp.IsZero() {
+		n.Timestamp = time.Now().UTC()
+	}
+
+	if logObj, ok := raw["log"].(map[string]any); ok {
+		if lvl, ok := logObj["level"].(string); ok {
+			n.Level = strings.ToLower(lvl)
+		}
+	}
+	if n.Level == "" {
+		if lvl, ok := raw["log.level"].(string); ok {
+			n.Level = strings.ToLower(lvl)
+		}
+	}
+
+	n.SrcService = ecsService(raw)
+
+	if traceObj, ok := raw["trace"].(map[string]any); ok {
+		n.TraceID, _ = traceObj["id"].(string)
+	}
+	if spanObj, ok := raw["span"].(map[string]any); ok {
+		n.SpanID, _ = spanObj["id"].(string)
+	}
+
+	if httpObj, ok := raw["http"].(map[string]any); ok {
+		if respObj, ok := httpObj["response"].(map[string]any); ok {
+			if code, ok := respObj["status_code"].(float64); ok {
+				n.StatusCode = int(code)
+			}
+		}
+	}
+
+	if evtObj, ok := raw["event"].(map[string]any); ok {
+		if ns, ok := evtObj["duration"].(float64); ok && ns > 0 {
+			n.Latency = time.Duration(int64(ns))
+		}
+	}
+
+	var method, urlPath string
+	if httpObj, ok := raw["http"].(map[string]any); ok {
+		if reqObj, ok := httpObj["request"].(map[string]any); ok {
+			method, _ = reqObj["method"].(string)
+		}
+	}
+	if urlObj, ok := raw["url"].(map[string]any); ok {
+		urlPath, _ = urlObj["path"].(string)
+		if urlPath == "" {
+			urlPath, _ = urlObj["full"].(string)
+		}
+	}
+	if method != "" && urlPath != "" {
+		n.Operation = strings.ToUpper(method) + " " + urlPath
+	} else if method != "" {
+		n.Operation = strings.ToUpper(method)
+	}
+
+	if dstObj, ok := raw["destination"].(map[string]any); ok {
+		n.DstService, _ = dstObj["address"].(string)
+	}
+	if n.DstService == "" {
+		if srvObj, ok := raw["server"].(map[string]any); ok {
+			n.DstService, _ = srvObj["address"].(string)
+		}
+	}
+
+	return n
+}
+
+func ecsService(raw map[string]any) string {
+	if svcObj, ok := raw["service"].(map[string]any); ok {
+		if name, ok := svcObj["name"].(string); ok && name != "" {
+			return name
+		}
+	}
+	return ""
 }

@@ -8,10 +8,15 @@ import (
 
 	"collector/internal/event"
 	"collector/internal/parse"
+	"collector/internal/resolve"
 )
 
 type Source interface {
 	Run(ctx context.Context, out chan<- event.Event) error
+}
+
+type NormalizedSink interface {
+	Run(ctx context.Context, in <-chan *event.NormalizedEvent) error
 }
 
 type Sink interface {
@@ -23,16 +28,18 @@ type Transformer interface {
 }
 
 type Pipeline struct {
-	Sources   []Source
-	Transform Transformer
-	Sink      Sink
+	Sources        []Source
+	Transform      Transformer
+	Sink           Sink
+	NormalizedSink NormalizedSink
+	Resolver       resolve.Resolver // optional, enriches DstService/SrcService
 }
 
 func (p *Pipeline) Run(ctx context.Context) error {
 	if len(p.Sources) == 0 {
 		return fmt.Errorf("pipeline: no sources provided")
 	}
-	if p.Sink == nil {
+	if p.Sink == nil && p.NormalizedSink == nil {
 		return fmt.Errorf("pipeline: no sink provided")
 	}
 
@@ -41,7 +48,8 @@ func (p *Pipeline) Run(ctx context.Context) error {
 
 	sourceChan := make(chan event.Event, 100)
 	parsedChan := make(chan event.Event, 100)
-	sinkChan := make(chan event.Event, 100)
+	normalChan := make(chan *event.NormalizedEvent, 100)
+	legacyChan := make(chan event.Event, 100)
 
 	errCh := make(chan error, 8)
 	var wg sync.WaitGroup
@@ -60,7 +68,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			}
 		}()
 	}
-
 	go func() {
 		wg.Wait()
 		close(sourceChan)
@@ -68,7 +75,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 
 	go func() {
 		defer close(parsedChan)
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -77,9 +83,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 				if !ok {
 					return
 				}
-
 				parse.ParseEvent(&evt)
-
 				select {
 				case parsedChan <- evt:
 				case <-ctx.Done():
@@ -89,38 +93,68 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	}()
 
-	go func() {
-		defer close(sinkChan)
+	transformedChan := parsedChan
+	if p.Transform != nil {
+		tc := make(chan event.Event, 100)
+		go func() {
+			defer close(tc)
+			if err := p.Transform.Run(ctx, parsedChan, tc); err != nil && err != context.Canceled {
+				select {
+				case errCh <- err:
+				default:
+				}
+				cancel()
+			}
+		}()
+		transformedChan = tc
+	}
 
-		if p.Transform == nil {
+	go func() {
+		defer close(normalChan)
+		if p.NormalizedSink == nil {
+			defer close(legacyChan)
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case evt, ok := <-parsedChan:
+				case evt, ok := <-transformedChan:
 					if !ok {
 						return
 					}
 					select {
-					case sinkChan <- evt:
+					case legacyChan <- evt:
 					case <-ctx.Done():
 						return
 					}
 				}
 			}
 		}
-
-		if err := p.Transform.Run(ctx, parsedChan, sinkChan); err != nil && err != context.Canceled {
+		for {
 			select {
-			case errCh <- err:
-			default:
+			case <-ctx.Done():
+				return
+			case evt, ok := <-transformedChan:
+				if !ok {
+					return
+				}
+				n := event.Normalize(&evt)
+				p.resolve(ctx, n)
+				select {
+				case normalChan <- n:
+				case <-ctx.Done():
+					return
+				}
 			}
-			cancel()
-			return
 		}
 	}()
 
-	sinkErr := p.Sink.Run(ctx, sinkChan)
+	var sinkErr error
+	if p.NormalizedSink != nil {
+		sinkErr = p.NormalizedSink.Run(ctx, normalChan)
+	} else {
+		sinkErr = p.Sink.Run(ctx, legacyChan)
+	}
+
 	if sinkErr != nil && sinkErr != context.Canceled {
 		select {
 		case errCh <- sinkErr:
@@ -137,6 +171,22 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	default:
 	}
-
 	return sinkErr
+}
+
+// resolve enriches DstService and SrcService using the configured Resolver.
+func (p *Pipeline) resolve(ctx context.Context, n *event.NormalizedEvent) {
+	if p.Resolver == nil {
+		return
+	}
+	if n.DstService != "" {
+		if svc, ok := p.Resolver.Resolve(ctx, n.DstService); ok {
+			n.DstService = svc
+		}
+	}
+	if n.SrcService == "" {
+		if svc, ok := p.Resolver.Resolve(ctx, n.SourceName); ok {
+			n.SrcService = svc
+		}
+	}
 }
