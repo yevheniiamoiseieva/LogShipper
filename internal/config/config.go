@@ -1,6 +1,7 @@
 package config
 
-// ResolveConfig holds resolver configuration.
+import "time"
+
 type ResolveConfig struct {
 	Static map[string]string `yaml:"static"`
 	Docker bool              `yaml:"docker"`
@@ -8,8 +9,21 @@ type ResolveConfig struct {
 }
 
 type CacheConfig struct {
-	TTL     string `yaml:"ttl"`      // e.g. "30s", "5m"
-	MaxSize int    `yaml:"max_size"` // 0 = unlimited
+	TTL     string `yaml:"ttl"`
+	MaxSize int    `yaml:"max_size"`
+}
+
+type GraphConfig struct {
+	EventBufSize      int           `yaml:"event_buf_size"`
+	EdgeTTL           time.Duration `yaml:"edge_ttl"`
+	StaleScanInterval time.Duration `yaml:"stale_scan_interval"`
+}
+
+type AnomalyConfig struct {
+	WindowSize      int     `yaml:"window_size"`
+	Threshold       float64 `yaml:"threshold"`
+	CooldownSeconds int     `yaml:"cooldown_seconds"`
+	MinSamples      int     `yaml:"min_samples"`
 }
 
 type Config struct {
@@ -17,6 +31,8 @@ type Config struct {
 	Transforms map[string]TransformConfig `yaml:"transforms"`
 	Sinks      map[string]SinkConfig      `yaml:"sinks"`
 	Resolve    ResolveConfig              `yaml:"resolve"`
+	Graph      GraphConfig                `yaml:"graph"`
+	Anomaly    AnomalyConfig              `yaml:"anomaly"`
 }
 
 type SourceConfig struct {
