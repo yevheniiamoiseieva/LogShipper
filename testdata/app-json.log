@@ -20,3 +20,9 @@
 {"ts":1710499638.991,"level":"warn","msg":"DB connection pool exhausted","service":"order-service","host":"worker-prod-2","pool_size":20,"waiting":7,"timeout_ms":5000}
 {"timestamp":"2024-03-15T08:07:44.210Z","levelname":"ERROR","name":"order.processor","message":"Order state machine invalid transition","order_id":"ORD-00412","from_state":"pending","to_state":"shipped","allowed":["confirmed","cancelled"]}
 {"time":"2024-03-15T08:08:01.120Z","level":"info","msg":"Graceful shutdown initiated","service":"payment-service","host":"worker-prod-1","signal":"SIGTERM","drain_timeout_s":30}
+{"time":"2024-03-15T08:05:00.000Z","level":"info","service":"api-gateway","dst_service":"payment-service","operation":"POST /api/v1/payments","duration_ms":45,"status_code":200,"trace_id":"trace-001"}
+{"time":"2024-03-15T08:05:01.000Z","level":"info","service":"payment-service","dst_service":"postgres","operation":"INSERT payments","duration_ms":12,"status_code":200,"trace_id":"trace-001"}
+{"time":"2024-03-15T08:05:02.000Z","level":"info","service":"api-gateway","dst_service":"auth-service","operation":"GET /validate","duration_ms":8,"status_code":200,"trace_id":"trace-002"}
+{"time":"2024-03-15T08:05:03.000Z","level":"info","service":"auth-service","dst_service":"postgres","operation":"SELECT users","duration_ms":5,"status_code":200,"trace_id":"trace-002"}
+{"time":"2024-03-15T08:05:04.000Z","level":"error","service":"payment-service","dst_service":"stripe-api","operation":"POST /charges","duration_ms":3200,"status_code":500,"trace_id":"trace-003"}
+{"time":"2024-03-15T08:05:05.000Z","level":"info","service":"postgres","dst_service":"api-gateway","operation":"notify","duration_ms":2,"status_code":200,"trace_id":"trace-004"}
