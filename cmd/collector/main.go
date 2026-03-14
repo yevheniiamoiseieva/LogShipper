@@ -19,6 +19,7 @@ func main() {
 	}
 
 	configPath := flag.String("c", "", "path to config file")
+	useTUI := flag.Bool("tui", false, "run with terminal UI")
 	flag.Parse()
 
 	if *configPath == "" {
@@ -42,7 +43,14 @@ func main() {
 	defer stop()
 
 	a := app.New(cfg)
-	if err := a.Run(ctx); err != nil {
+
+	if *useTUI {
+		err = a.RunWithTUI(ctx)
+	} else {
+		err = a.Run(ctx)
+	}
+
+	if err != nil {
 		log.Fatal(err)
 	}
 }

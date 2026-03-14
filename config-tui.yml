@@ -1,0 +1,19 @@
+sources:
+  app_file:
+    type: "file"
+    path: "testdata/app-json.log"
+    service: "app-service"
+
+transforms:
+  add_metadata:
+    type: "remap-lite"
+    inputs: ["app_file"]
+    case: "camel"
+    add_fields:
+      env: "dev"
+
+sinks:
+  stdout_final:
+    type: "stdout"
+    inputs: ["add_metadata"]
+    pretty: false
