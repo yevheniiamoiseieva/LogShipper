@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,6 +13,7 @@ import (
 	"collector/internal/config"
 	"collector/internal/event"
 	"collector/internal/graph"
+	"collector/internal/metrics"
 	"collector/internal/pipeline"
 	"collector/internal/resolve"
 	"collector/internal/sinks"
@@ -60,7 +62,7 @@ func (a *App) RunWithTUI(ctx context.Context) error {
 	m := tui.New(g, det, cancel)
 	prog := tea.NewProgram(m, tea.WithAltScreen())
 
-	sink := &graphSink{graph: g}
+	sink := &graphSink{graph: g, processed: func() { metrics.PipelineProcessed.Inc() }}
 
 	p, err := a.buildPipelineWithSink(sink)
 	if err != nil {
@@ -82,8 +84,45 @@ func (a *App) RunWithTUI(ctx context.Context) error {
 	return <-pipelineErr
 }
 
+func (a *App) RunMetrics(ctx context.Context, addr string) error {
+	g := graph.New(1024)
+	det := anomaly.NewZScoreDetector(100, 3.0, 1024).
+		WithMinSamples(20).
+		WithCooldown(30 * time.Second)
+	g.WithAnomalyDetector(det)
+
+	ctx, cancel := context.WithCancel(ctx)
+	g.Start(ctx)
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", metrics.Handler())
+	srv := &http.Server{Addr: addr, Handler: mux}
+	go func() {
+		<-ctx.Done()
+		srv.Shutdown(context.Background()) //nolint:errcheck
+	}()
+	go func() {
+		log.Printf("metrics server listening on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("metrics server error: %v", err)
+		}
+	}()
+
+	sink := &graphSink{graph: g, processed: func() { metrics.PipelineProcessed.Inc() }}
+	p, err := a.buildPipelineWithSink(sink)
+	if err != nil {
+		cancel()
+		return err
+	}
+
+	err = p.Run(ctx)
+	cancel()
+	return err
+}
+
 type graphSink struct {
-	graph *graph.CallGraph
+	graph     *graph.CallGraph
+	processed func()
 }
 
 func (s *graphSink) Run(ctx context.Context, in <-chan *event.NormalizedEvent) error {
@@ -94,6 +133,9 @@ func (s *graphSink) Run(ctx context.Context, in <-chan *event.NormalizedEvent) e
 		case ev, ok := <-in:
 			if !ok {
 				return nil
+			}
+			if s.processed != nil {
+				s.processed()
 			}
 			if ev.SrcService != "" && ev.DstService != "" {
 				s.graph.Feed(&graph.NormalizedEvent{

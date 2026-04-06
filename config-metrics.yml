@@ -1,0 +1,10 @@
+sources:
+  stdin_main:
+    type: "stdin"
+    service: "demo"
+
+sinks:
+  stdout_out:
+    type: "stdout"
+    inputs: ["stdin_main"]
+    pretty: false

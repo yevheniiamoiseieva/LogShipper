@@ -20,6 +20,8 @@ func main() {
 
 	configPath := flag.String("c", "", "path to config file")
 	useTUI := flag.Bool("tui", false, "run with terminal UI")
+	useMetrics := flag.Bool("metrics", false, "run headless with Prometheus metrics endpoint")
+	metricsAddr := flag.String("metrics-addr", ":2112", "metrics server listen address")
 	flag.Parse()
 
 	if *configPath == "" {
@@ -44,9 +46,12 @@ func main() {
 
 	a := app.New(cfg)
 
-	if *useTUI {
+	switch {
+	case *useTUI:
 		err = a.RunWithTUI(ctx)
-	} else {
+	case *useMetrics:
+		err = a.RunMetrics(ctx, *metricsAddr)
+	default:
 		err = a.Run(ctx)
 	}
 

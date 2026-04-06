@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"collector/internal/metrics"
 )
 
 type NormalizedEvent struct {
@@ -114,6 +116,7 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 	g.mu.Unlock()
 
 	if isNew {
+		metrics.GraphNewEdges.Inc()
 		g.emit(GraphEvent{
 			Type:      GraphEventNewEdge,
 			Edge:      edgeCopy,
@@ -122,6 +125,7 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 
 		newCycles := g.cycles.findNewCycles(adj)
 		for _, cycle := range newCycles {
+			metrics.GraphCycles.Inc()
 			g.emit(GraphEvent{
 				Type:      GraphEventNewCycle,
 				Edge:      edgeCopy,
@@ -130,6 +134,9 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 			})
 		}
 	}
+
+	metrics.GraphNodes.Set(float64(len(adj)))
+	metrics.GraphEdges.Set(float64(len(g.edges)))
 	if g.detector != nil {
 		g.detector.Feed(key, "latency", float64(ev.Latency.Milliseconds()))
 		g.detector.Feed(key, "error_rate", edge.ErrorRate())

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"collector/internal/event"
+	"collector/internal/metrics"
 )
 
 var (
@@ -70,8 +71,10 @@ func ParseNormalized(line, sourceName string) *event.NormalizedEvent {
 			"line_prefix", truncate(line, 120),
 		)
 		ParseErrorTotal.Add(1)
+		metrics.ParseErrors.Inc()
 	} else {
 		ParseSuccessTotal.Add(1)
+		metrics.ParseTotal.WithLabelValues(n.Format).Inc()
 	}
 
 	return n

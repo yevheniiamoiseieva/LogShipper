@@ -4,6 +4,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"collector/internal/metrics"
 )
 
 type AnomalyEvent struct {
@@ -90,6 +92,7 @@ func (d *ZScoreDetector) Feed(edgeKey, metric string, value float64) {
 
 	d.inAnomaly[key] = true
 	d.lastAlerted[key] = time.Now()
+	metrics.AnomaliesTotal.WithLabelValues(metric).Inc()
 
 	ev := AnomalyEvent{
 		EdgeKey:   edgeKey,

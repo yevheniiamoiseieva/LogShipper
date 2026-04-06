@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -7,16 +7,16 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/collector ./cmd/collector/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/collector ./cmd/collector && \
+    CGO_ENABLED=0 GOOS=linux go build -o /app/demo    ./cmd/demo
 
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
 COPY --from=builder /app/collector .
-
+COPY --from=builder /app/demo .
 COPY config.yml .
-
-ENTRYPOINT ["./collector", "-c", "config.yml"]
+COPY config-metrics.yml .
