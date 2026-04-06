@@ -9,8 +9,6 @@
 *.test
 *.out
 /go.work.sum
-/go.sum
-/go.mod
 /.idea/
 *.iws
 *.iml
