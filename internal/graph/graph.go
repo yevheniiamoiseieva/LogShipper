@@ -112,6 +112,8 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 
 	adj := g.buildAdjacency()
 	edgeCopy := *edge
+	nodeCount := len(adj)
+	edgeCount := len(g.edges)
 
 	g.mu.Unlock()
 
@@ -135,8 +137,8 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 		}
 	}
 
-	metrics.GraphNodes.Set(float64(len(adj)))
-	metrics.GraphEdges.Set(float64(len(g.edges)))
+	metrics.GraphNodes.Set(float64(nodeCount))
+	metrics.GraphEdges.Set(float64(edgeCount))
 	if g.detector != nil {
 		g.detector.Feed(key, "latency", float64(ev.Latency.Milliseconds()))
 		g.detector.Feed(key, "error_rate", edge.ErrorRate())

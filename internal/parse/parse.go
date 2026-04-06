@@ -22,23 +22,28 @@ func ParseEvent(evt *event.Event) {
 	s := strings.TrimSpace(evt.Message)
 	if s == "" {
 		evt.Attrs["format"] = "empty"
+		metrics.ParseErrors.Inc()
 		return
 	}
 
 	var raw map[string]any
 	if !tryUnmarshalJSON(s, &raw) {
 		MarkPlain(evt)
+		metrics.ParseTotal.WithLabelValues("plain").Inc()
 		return
 	}
 
 	if ParseMetric(evt, raw) {
+		metrics.ParseTotal.WithLabelValues("metric").Inc()
 		return
 	}
 	if IsECS(raw) {
 		ParseECS(evt, raw)
+		metrics.ParseTotal.WithLabelValues("ecs").Inc()
 		return
 	}
 	ParseJSON(evt, raw)
+	metrics.ParseTotal.WithLabelValues("json").Inc()
 }
 
 // ParseNormalized parses a raw log line into a NormalizedEvent.
