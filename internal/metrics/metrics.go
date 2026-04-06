@@ -53,6 +53,22 @@ var (
 		Name: "logshipper_pipeline_processed_total",
 		Help: "Total events processed through the full pipeline",
 	})
+
+	EdgeCalls = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "logshipper_edge_calls_total",
+		Help: "Total calls per service edge (src→dst)",
+	}, []string{"src", "dst"})
+
+	EdgeErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "logshipper_edge_errors_total",
+		Help: "Total error calls per service edge (src→dst)",
+	}, []string{"src", "dst"})
+
+	EdgeLatencyMs = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "logshipper_edge_latency_ms",
+		Help:    "Call latency per service edge in milliseconds",
+		Buckets: []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000},
+	}, []string{"src", "dst"})
 )
 
 func Handler() http.Handler {

@@ -139,6 +139,13 @@ func (g *CallGraph) Feed(ev *NormalizedEvent) {
 
 	metrics.GraphNodes.Set(float64(nodeCount))
 	metrics.GraphEdges.Set(float64(edgeCount))
+	metrics.EdgeCalls.WithLabelValues(src, dst).Inc()
+	if ev.IsError {
+		metrics.EdgeErrors.WithLabelValues(src, dst).Inc()
+	}
+	if ev.Latency > 0 {
+		metrics.EdgeLatencyMs.WithLabelValues(src, dst).Observe(float64(ev.Latency.Milliseconds()))
+	}
 	if g.detector != nil {
 		g.detector.Feed(key, "latency", float64(ev.Latency.Milliseconds()))
 		g.detector.Feed(key, "error_rate", edge.ErrorRate())

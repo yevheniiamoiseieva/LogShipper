@@ -118,6 +118,8 @@ func Normalize(evt *Event) *NormalizedEvent {
 	n.SpanID, _ = stringVal(evt.Attrs, "span_id")
 	n.DstService, _ = stringVal(evt.Attrs, "dst_service")
 	n.Operation, _ = stringVal(evt.Attrs, "operation")
+	n.StatusCode = attrsStatusCode(evt.Attrs)
+	n.Latency = attrsLatency(evt.Attrs)
 
 	if evt.Type == TypeMetric && evt.Metric != "" {
 		n.Operation = evt.Metric
@@ -127,6 +129,37 @@ func Normalize(evt *Event) *NormalizedEvent {
 		n.Raw["message"] = evt.Message
 	}
 	return n
+}
+
+func attrsStatusCode(attrs map[string]any) int {
+	for _, key := range []string{"status_code", "status", "http.status", "code", "http_status"} {
+		v, ok := attrs[key]
+		if !ok {
+			continue
+		}
+		switch n := v.(type) {
+		case float64:
+			return int(n)
+		case int:
+			return n
+		}
+	}
+	return 0
+}
+
+func attrsLatency(attrs map[string]any) time.Duration {
+	for _, key := range []string{"latency_ms", "duration_ms", "elapsed_ms", "latency", "duration", "elapsed"} {
+		v, ok := attrs[key]
+		if !ok {
+			continue
+		}
+		ms, ok := v.(float64)
+		if !ok {
+			continue
+		}
+		return time.Duration(ms * float64(time.Millisecond))
+	}
+	return 0
 }
 
 // CorrelationKey returns TraceID if set, otherwise "src->dst:operation".
