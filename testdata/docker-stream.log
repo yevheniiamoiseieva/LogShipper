@@ -1,0 +1,20 @@
+{"log":"2024-03-15T08:01:02.134Z INFO  payment-service started on :8080\n","stream":"stdout","time":"2024-03-15T08:01:02.134812345Z"}
+{"log":"{\"time\":\"2024-03-15T08:01:15.220Z\",\"level\":\"info\",\"msg\":\"Incoming request\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"method\":\"POST\",\"path\":\"/api/v1/payments\"}\n","stream":"stdout","time":"2024-03-15T08:01:15.220441123Z"}
+{"log":"{\"time\":\"2024-03-15T08:01:15.891Z\",\"level\":\"info\",\"msg\":\"Payment processed\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"tx_id\":\"tx-9821\",\"duration_ms\":671}\n","stream":"stdout","time":"2024-03-15T08:01:15.891203456Z"}
+{"log":"2024-03-15 08:01:33,010 DEBUG product.cache Cache hit for key product:9871\n","stream":"stdout","time":"2024-03-15T08:01:33.010991234Z"}
+{"log":"{\"time\":\"2024-03-15T08:02:14.442Z\",\"level\":\"warn\",\"msg\":\"User not found\",\"trace_id\":\"9d0e0e47364bf92f3577b34da6a3ce92\",\"user_id\":9999}\n","stream":"stderr","time":"2024-03-15T08:02:14.442871234Z"}
+{"log":"2024-03-15 08:02:29,780 INFO  user.profile Profile updated for user_id=4822\n","stream":"stdout","time":"2024-03-15T08:02:29.780123456Z"}
+{"log":"{\"time\":\"2024-03-15T08:02:45.100Z\",\"level\":\"warn\",\"msg\":\"Authentication failed\",\"ip\":\"10.0.0.31\",\"attempt\":1}\n","stream":"stderr","time":"2024-03-15T08:02:45.100334512Z"}
+{"log":"{\"time\":\"2024-03-15T08:02:46.310Z\",\"level\":\"error\",\"msg\":\"Brute force detected\",\"ip\":\"10.0.0.31\",\"attempts\":3,\"action\":\"ip_blocked\"}\n","stream":"stderr","time":"2024-03-15T08:02:46.310887654Z"}
+{"log":"2024-03-15T08:03:55.002Z ERROR payment.gateway Gateway timeout after 30s\n","stream":"stderr","time":"2024-03-15T08:03:55.002441789Z"}
+{"log":"Traceback (most recent call last):\n","stream":"stderr","time":"2024-03-15T08:03:55.101000000Z"}
+{"log":"  File \"/app/gateway/stripe.py\", line 88, in charge\n","stream":"stderr","time":"2024-03-15T08:03:55.101100000Z"}
+{"log":"    response = requests.post(url, json=payload, timeout=30)\n","stream":"stderr","time":"2024-03-15T08:03:55.101200000Z"}
+{"log":"requests.exceptions.Timeout: HTTPSConnectionPool(host='api.stripe.com', port=443): Read timed out. (read timeout=30)\n","stream":"stderr","time":"2024-03-15T08:03:55.101300000Z"}
+{"log":"{\"time\":\"2024-03-15T08:04:30.000Z\",\"level\":\"debug\",\"msg\":\"Health check OK\",\"checks\":{\"db\":\"ok\",\"redis\":\"ok\"}}\n","stream":"stdout","time":"2024-03-15T08:04:30.000512345Z"}
+{"log":"192.168.1.10 - - [15/Mar/2024:08:04:52 +0000] \"GET /metrics HTTP/1.1\" 200 24318 \"-\" \"Prometheus/2.48.0\"\n","stream":"stdout","time":"2024-03-15T08:04:52.000112233Z"}
+{"log":"{\"time\":\"2024-03-15T08:05:11.320Z\",\"level\":\"info\",\"msg\":\"Export job enqueued\",\"job_id\":\"job-2241\",\"trace_id\":\"a6a3ce929d0e0e47364bf92f3577b34d\"}\n","stream":"stdout","time":"2024-03-15T08:05:11.320445678Z"}
+{"log":"2024-03-15 08:06:23,800 INFO  order.processor Order ORD-00412 status changed to confirmed\n","stream":"stdout","time":"2024-03-15T08:06:23.800334512Z"}
+{"log":"{\"time\":\"2024-03-15T08:07:18.450Z\",\"level\":\"info\",\"msg\":\"Checkout completed\",\"trace_id\":\"577b34da6a3ce929d0e0e47364bf92f3\",\"duration_ms\":312}\n","stream":"stdout","time":"2024-03-15T08:07:18.450112233Z"}
+{"log":"2024-03-15T08:08:01.120Z INFO  Received SIGTERM — starting graceful shutdown\n","stream":"stdout","time":"2024-03-15T08:08:01.120334512Z"}
+{"log":"2024-03-15T08:08:05.500Z INFO  All connections closed. Exiting.\n","stream":"stdout","time":"2024-03-15T08:08:05.500998765Z"}

@@ -4,12 +4,20 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"collector/internal/anomaly"
 	"collector/internal/config"
+	"collector/internal/event"
+	"collector/internal/graph"
 	"collector/internal/pipeline"
+	"collector/internal/resolve"
 	"collector/internal/sinks"
 	"collector/internal/sources"
 	"collector/internal/transform"
+	"collector/internal/tui"
 )
 
 type App struct {
@@ -27,16 +35,78 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	
+
 	go func() {
 		<-ctx.Done()
 		log.Println("shutdown signal received")
 	}()
 
 	err = p.Run(ctx)
-
 	log.Println("collector service stopped")
 	return err
+}
+
+func (a *App) RunWithTUI(ctx context.Context) error {
+	g := graph.New(256)
+
+	det := anomaly.NewZScoreDetector(100, 3.0, 256).
+		WithMinSamples(20).
+		WithCooldown(30 * time.Second)
+	g.WithAnomalyDetector(det)
+
+	ctx, cancel := context.WithCancel(ctx)
+	g.Start(ctx)
+
+	m := tui.New(g, det, cancel)
+	prog := tea.NewProgram(m, tea.WithAltScreen())
+
+	sink := &graphSink{graph: g}
+
+	p, err := a.buildPipelineWithSink(sink)
+	if err != nil {
+		cancel()
+		return err
+	}
+
+	pipelineErr := make(chan error, 1)
+	go func() {
+		pipelineErr <- p.Run(ctx)
+	}()
+
+	if _, err := prog.Run(); err != nil {
+		cancel()
+		return err
+	}
+
+	cancel()
+	return <-pipelineErr
+}
+
+type graphSink struct {
+	graph *graph.CallGraph
+}
+
+func (s *graphSink) Run(ctx context.Context, in <-chan *event.NormalizedEvent) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case ev, ok := <-in:
+			if !ok {
+				return nil
+			}
+			if ev.SrcService != "" && ev.DstService != "" {
+				s.graph.Feed(&graph.NormalizedEvent{
+					SrcService: ev.SrcService,
+					DstService: ev.DstService,
+					Operation:  ev.Operation,
+					IsError:    ev.StatusCode >= 500,
+					Latency:    ev.Latency,
+					OccurredAt: ev.Timestamp,
+				})
+			}
+		}
+	}
 }
 
 func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
@@ -53,11 +123,82 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 		return nil, fmt.Errorf("only 1 sink is supported right now, got: %d", len(a.cfg.Sinks))
 	}
 
-	sourcesByName := make(map[string]pipeline.Source, len(a.cfg.Sources))
+	selectedSources, trans, transformName, hasTransform, err := a.buildSourcesAndTransform()
+	if err != nil {
+		return nil, err
+	}
 
+	var sinkName string
+	var sinkCfg config.SinkConfig
+	for name, sCfg := range a.cfg.Sinks {
+		sinkName = name
+		sinkCfg = sCfg
+		break
+	}
+
+	log.Printf("initializing sink: %s (type: %s)", sinkName, sinkCfg.Type)
+
+	if err := a.validateSinkInputs(sinkName, sinkCfg, transformName, hasTransform); err != nil {
+		return nil, err
+	}
+
+	var sink pipeline.Sink
+	switch sinkCfg.Type {
+	case "stdout":
+		sink = &sinks.StdoutSink{Pretty: sinkCfg.Pretty}
+	default:
+		return nil, fmt.Errorf("unknown sink type: %s", sinkCfg.Type)
+	}
+
+	resolver, err := resolve.FromConfig(a.cfg.Resolve)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pipeline.Pipeline{
+		Sources:   selectedSources,
+		Transform: trans,
+		Sink:      sink,
+		Resolver:  resolver,
+	}, nil
+}
+
+func (a *App) buildPipelineWithSink(normSink pipeline.NormalizedSink) (*pipeline.Pipeline, error) {
+	if len(a.cfg.Sources) == 0 {
+		return nil, fmt.Errorf("no sources defined in config")
+	}
+	if len(a.cfg.Transforms) > 1 {
+		return nil, fmt.Errorf("only 1 transform is supported right now, got: %d", len(a.cfg.Transforms))
+	}
+
+	selectedSources, trans, _, _, err := a.buildSourcesAndTransform()
+	if err != nil {
+		return nil, err
+	}
+
+	resolver, err := resolve.FromConfig(a.cfg.Resolve)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pipeline.Pipeline{
+		Sources:        selectedSources,
+		Transform:      trans,
+		NormalizedSink: normSink,
+		Resolver:       resolver,
+	}, nil
+}
+
+func (a *App) buildSourcesAndTransform() (
+	selectedSources []pipeline.Source,
+	trans pipeline.Transformer,
+	transformName string,
+	hasTransform bool,
+	err error,
+) {
+	sourcesByName := make(map[string]pipeline.Source, len(a.cfg.Sources))
 	for name, sCfg := range a.cfg.Sources {
 		log.Printf("initializing source: %s (type: %s)", name, sCfg.Type)
-
 		var src pipeline.Source
 		switch sCfg.Type {
 		case "stdin":
@@ -67,19 +208,13 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 		case "docker":
 			src = &sources.DockerSource{Service: sCfg.Service, ContainerID: sCfg.ContainerID}
 		default:
-			return nil, fmt.Errorf("unknown source type: %s", sCfg.Type)
+			err = fmt.Errorf("unknown source type: %s", sCfg.Type)
+			return
 		}
-
 		sourcesByName[name] = src
 	}
 
-	var (
-		trans         pipeline.Transformer
-		transformName string
-		transformCfg  config.TransformConfig
-		hasTransform  bool
-	)
-
+	var transformCfg config.TransformConfig
 	for name, tCfg := range a.cfg.Transforms {
 		transformName = name
 		transformCfg = tCfg
@@ -87,10 +222,8 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 		break
 	}
 
-	var selectedSources []pipeline.Source
 	if hasTransform {
 		log.Printf("initializing transform: %s (type: %s)", transformName, transformCfg.Type)
-
 		switch transformCfg.Type {
 		case "remap-lite":
 			trans = &transform.RemapTransform{
@@ -98,13 +231,14 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 				Case:      transformCfg.Case,
 			}
 		default:
-			return nil, fmt.Errorf("unknown transform type: %s", transformCfg.Type)
+			err = fmt.Errorf("unknown transform type: %s", transformCfg.Type)
+			return
 		}
-
 		for _, inputName := range transformCfg.Inputs {
 			src, ok := sourcesByName[inputName]
 			if !ok {
-				return nil, fmt.Errorf("transform [%s]: unknown source '%s'", transformName, inputName)
+				err = fmt.Errorf("transform [%s]: unknown source '%s'", transformName, inputName)
+				return
 			}
 			selectedSources = append(selectedSources, src)
 		}
@@ -115,50 +249,22 @@ func (a *App) buildPipeline() (*pipeline.Pipeline, error) {
 	}
 
 	if len(selectedSources) == 0 {
-		return nil, fmt.Errorf("no sources selected for pipeline")
+		err = fmt.Errorf("no sources selected for pipeline")
 	}
+	return
+}
 
-	var (
-		sink     pipeline.Sink
-		sinkName string
-		sinkCfg  config.SinkConfig
-	)
-
-	for name, sCfg := range a.cfg.Sinks {
-		sinkName = name
-		sinkCfg = sCfg
-		break
-	}
-
-	log.Printf("initializing sink: %s (type: %s)", sinkName, sinkCfg.Type)
-
+func (a *App) validateSinkInputs(sinkName string, sinkCfg config.SinkConfig, transformName string, hasTransform bool) error {
 	if hasTransform {
-		ok := false
 		for _, in := range sinkCfg.Inputs {
 			if in == transformName {
-				ok = true
-				break
+				return nil
 			}
 		}
-		if !ok {
-			return nil, fmt.Errorf("sink [%s] must include transform '%s' in inputs", sinkName, transformName)
-		}
-	} else {
-		if len(sinkCfg.Inputs) == 0 {
-			return nil, fmt.Errorf("sink [%s]: inputs list is empty", sinkName)
-		}
+		return fmt.Errorf("sink [%s] must include transform '%s' in inputs", sinkName, transformName)
 	}
-
-	switch sinkCfg.Type {
-	case "stdout":
-		sink = &sinks.StdoutSink{Pretty: sinkCfg.Pretty}
-	default:
-		return nil, fmt.Errorf("unknown sink type: %s", sinkCfg.Type)
+	if len(sinkCfg.Inputs) == 0 {
+		return fmt.Errorf("sink [%s]: inputs list is empty", sinkName)
 	}
-
-	return &pipeline.Pipeline{
-		Sources:   selectedSources,
-		Transform: trans,
-		Sink:      sink,
-	}, nil
+	return nil
 }
