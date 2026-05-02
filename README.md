@@ -1,38 +1,770 @@
-# Logshipper 
+# Collector — Система збору, нормалізації та аналізу журналів подій мікросервісних архітектур
 
-A simple, fast, and extensible log shipper written in Go. This utility reads log streams from standard input (**stdin**), supports transformation of **structured JSON logs**, and outputs them to the console or forwards them via **HTTP POST** requests to a log aggregation endpoint (e.g., Loki, Elasticsearch, or a Webhook).
-
-##  Features
-
-* **Flexible Input:** Reads logs from `stdin`, making it easy to pipe output from `docker logs -f`, Kubernetes (`kubectl logs`), or files (`tail -f`).
-* **JSON Transformation:** Automatically extracts metadata (**Timestamp**, **Log Level**) from structured JSON logs for standardization.
-* **Standardized Output:** Converts all incoming data into a uniform **`LogRecord`** structure before processing.
-* **Forwarding:** Sends standardized log records as JSON via HTTP POST to a configurable endpoint.
-* **Graceful Shutdown:** Handles termination signals (`SIGINT`, `SIGTERM`) cleanly.
+> Дипломна робота. Розробка програмного забезпечення для агрегації та статистичного аналізу потоків подій у розподілених системах.
 
 ---
 
-##  Usage
+## Зміст
 
-The program is configured entirely via command-line flags.
-
-### Available Flags
-
-| Flag | Default Value | Description |
-| :--- | :--- | :--- |
-| `-source` | `stdin` | Origin of the log (e.g., `docker`, `k8s`, `stdin`). Used for the `Source` field in the log record. |
-| `-service` | `""` | Name of the service generating the log (e.g., `my-api`, `database`). Used for the `Service` field. |
-| `-endpoint` | `""` | Target URL for HTTP POST forwarding (e.g., `http://localhost:3100/loki/api/v1/push`). If empty, output is written to console. |
-| `-format` | `text` | Log format: `text` (raw line) or **`json`** (enables extraction of `ts`/`time` and `level` fields). |
+1. [Анотація](#анотація)
+2. [Актуальність та мотивація](#актуальність-та-мотивація)
+3. [Постановка задачі](#постановка-задачі)
+4. [Архітектура системи](#архітектура-системи)
+5. [Компоненти та модулі](#компоненти-та-модулі)
+   - [Джерела подій (Sources)](#джерела-подій-sources)
+   - [Синтаксичний аналізатор (Parser)](#синтаксичний-аналізатор-parser)
+   - [Трансформатор даних (Transform)](#трансформатор-даних-transform)
+   - [Резолвер сервісів (Resolver)](#резолвер-сервісів-resolver)
+   - [Конвеєр обробки (Pipeline)](#конвеєр-обробки-pipeline)
+   - [Граф залежностей (Graph)](#граф-залежностей-graph)
+   - [Детектор аномалій (Anomaly Detector)](#детектор-аномалій-anomaly-detector)
+   - [Термінальний інтерфейс (TUI)](#термінальний-інтерфейс-tui)
+   - [Метрики (Prometheus Metrics)](#метрики-prometheus-metrics)
+6. [Моделі даних](#моделі-даних)
+7. [Алгоритм Z-оцінки для виявлення аномалій](#алгоритм-z-оцінки-для-виявлення-аномалій)
+8. [Підтримувані формати журналів](#підтримувані-формати-журналів)
+9. [Конфігурація системи](#конфігурація-системи)
+10. [Розгортання](#розгортання)
+11. [Моніторинг та спостережуваність](#моніторинг-та-спостережуваність)
+12. [Тестування](#тестування)
+13. [Стек технологій](#стек-технологій)
+14. [Структура репозиторію](#структура-репозиторію)
+15. [Запуск та використання](#запуск-та-використання)
 
 ---
 
-##  Examples
+## Анотація
 
-### 1. Console Output (Testing)
+**Collector** — програмна система для агрегації, нормалізації та статистичного аналізу потоків журналів подій у розподілених мікросервісних архітектурах. Система реалізує конвеєрну модель обробки даних: від прийому різноформатних журнальних записів з множини джерел — до побудови динамічного графу залежностей сервісів та автоматичного виявлення аномалій у характеристиках міжсервісної взаємодії.
 
-Read a simple text log from standard input and print the standardized output to the console.
+Система реалізована мовою Go з використанням конкурентної моделі обробки на основі CSP-каналів (Communicating Sequential Processes), що забезпечує ефективну паралельну обробку подій при низькому споживанні ресурсів. Для виявлення аномалій застосовується алгоритм Z-оцінки з ковзним вікном на основі онлайн-алгоритму Велфорда. Спостережуваність системи забезпечується інтеграцією з екосистемою Prometheus/Grafana.
+
+---
+
+## Актуальність та мотивація
+
+Сучасні програмні системи будуються за принципами мікросервісної архітектури, в якій єдиний застосунок декомпонується на множину автономних сервісів, що взаємодіють через мережеві інтерфейси. Така архітектура забезпечує незалежне масштабування, ізоляцію збоїв та гнучкість розгортання, однак суттєво ускладнює діагностику та моніторинг.
+
+Зокрема, виникають такі проблеми:
+
+- **Гетерогенність форматів журналів.** Кожен сервіс може використовувати власний формат логування (JSON, ECS, plain text, syslog тощо), що унеможливлює уніфікований аналіз без проміжного перетворення.
+- **Відсутність цілісної картини залежностей.** Без систематичного збору та аналізу журналів неможливо відновити граф міжсервісних залежностей у режимі реального часу.
+- **Виявлення аномалій.** При великій кількості сервісів та подій ручний контроль є неефективним; потрібні автоматизовані статистичні методи для виявлення відхилень від норми.
+- **Затримка реакції.** Відсутність інструментів реального часу призводить до запізнілої реакції на інциденти в продуктивному середовищі.
+
+Дана система вирішує перелічені проблеми шляхом побудови уніфікованого конвеєра збору та аналізу журналів.
+
+---
+
+## Постановка задачі
+
+Метою дипломної роботи є розробка програмної системи, що виконує такі функції:
+
+1. **Збір** журналів подій з гетерогенних джерел: стандартний ввід (stdin), файлова система, Docker-контейнери.
+2. **Синтаксичний аналіз** записів у форматах: JSON, ECS (Elastic Common Schema), plain text, Nginx, syslog, Python logging, метрики.
+3. **Нормалізація** різноформатних записів до єдиної канонічної структури.
+4. **Збагачення** подій: розпізнавання імен сервісів за IP-адресами, іменами хостів та ідентифікаторами Docker-контейнерів.
+5. **Побудова динамічного графу** залежностей між сервісами у режимі реального часу.
+6. **Статистичний аналіз** та автоматичне виявлення аномалій у часових рядах затримок та частоти помилок.
+7. **Візуалізація** стану системи в термінальному інтерфейсі та експорт метрик для зовнішніх моніторингових систем.
+
+---
+
+## Архітектура системи
+
+Система побудована за **конвеєрною архітектурою** (pipeline architecture) з чітким розділенням відповідальності між компонентами. Кожен компонент є незалежним модулем, що отримує дані через вхідний канал та передає оброблені дані через вихідний канал.
+
+### Загальна схема потоку даних
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ДЖЕРЕЛА ПОДІЙ                            │
+│  ┌───────────┐    ┌───────────┐    ┌──────────────────────┐     │
+│  │   Stdin   │    │   File    │    │  Docker Container    │     │
+│  └─────┬─────┘    └─────┬─────┘    └──────────┬───────────┘     │
+└────────┼────────────────┼─────────────────────┼─────────────────┘
+         └────────────────┼─────────────────────┘
+                          ▼
+                 ┌─────────────────┐
+                 │  event.Event    │  ← сирий запис
+                 └────────┬────────┘
+                          ▼
+                 ┌─────────────────┐
+                 │     Parser      │  ← визначення формату та розбір
+                 └────────┬────────┘
+                          ▼
+                 ┌─────────────────┐
+                 │   Transform     │  ← збагачення полів, нормалізація регістру
+                 └────────┬────────┘
+                          ▼
+                 ┌──────────────────────┐
+                 │  event.NormalizedEvent│  ← уніфікована структура
+                 └──────────┬───────────┘
+                            ▼
+                 ┌─────────────────┐
+                 │    Resolver     │  ← розпізнавання імен сервісів
+                 └────────┬────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+   ┌──────────┐   ┌──────────────┐  ┌──────────────┐
+   │  Stdout  │   │  CallGraph   │  │   Metrics    │
+   │   Sink   │   │ (граф залеж.)│  │ (Prometheus) │
+   └──────────┘   └──────┬───────┘  └──────────────┘
+                         │
+                  ┌──────┴───────┐
+                  ▼              ▼
+           ┌──────────┐  ┌──────────────┐
+           │   TUI    │  │   Anomaly    │
+           │ (дисплей)│  │   Detector   │
+           └──────────┘  └──────────────┘
+```
+
+### Принцип конкурентності
+
+Кожне джерело подій виконується в окремій горутині Go. Міжкомпонентна комунікація реалізована через буферизовані CSP-канали (`chan event.Event`). Конвеєр підтримує скасування через `context.Context`, що забезпечує коректне завершення при отриманні сигналу зупинки.
+
+---
+
+## Компоненти та модулі
+
+### Джерела подій (Sources)
+
+Розміщення: `internal/sources/`
+
+Кожне джерело реалізує інтерфейс:
+
+```go
+type Source interface {
+    Run(ctx context.Context, out chan<- event.Event) error
+}
+```
+
+| Джерело | Тип | Опис |
+|---|---|---|
+| `StdinSource` | `stdin` | Зчитує рядки зі стандартного потоку вводу |
+| `FileSource` | `file` | Відстежує файл за допомогою механізму tail (підтримує ротацію) |
+| `DockerSource` | `docker` | Підключається до Docker-демону через API та стримує журнали контейнера |
+
+**DockerSource** використовує офіційний клієнт `github.com/docker/docker` для підключення до Unix-сокету Docker-демону (`/var/run/docker.sock`) та отримання потокових журналів контейнера у форматі `multiplexed stream`.
+
+---
+
+### Синтаксичний аналізатор (Parser)
+
+Розміщення: `internal/parse/`
+
+Аналізатор реалізує автоматичне визначення формату вхідного запису та його структурований розбір. Підтримуються такі формати:
+
+| Формат | Ознаки визначення | Ключові поля |
+|---|---|---|
+| **JSON** | Рядок починається з `{` | `timestamp`, `level`, `service`, `dst_service`, `latency_ms`, `status_code`, `trace_id`, `span_id` |
+| **ECS** (Elastic Common Schema) | JSON з полями `@timestamp`, `log.level` | `@timestamp`, `service.name`, `trace.id`, `span.id`, `event.action`, `event.duration`, `http.response.status_code` |
+| **Metric** | JSON з полем `metric` | `metric`, `value`, `service`, `timestamp` |
+| **Nginx** | Відповідає регулярному виразу Nginx Combined Log Format | IP, метод, URI, статус-код, розмір |
+| **Syslog** | RFC 3164 / RFC 5424 | `facility`, `severity`, `hostname`, `tag`, `message` |
+| **Python logging** | Формат `РІВЕНЬ:ім'я_логера:повідомлення` | рівень, модуль, повідомлення |
+| **Plain text** | Будь-який інший рядок | Регулярний вираз для витягування timestamp та службових тегів |
+
+Нормалізований вихід аналізатора — структура `event.NormalizedEvent`, що містить уніфіковані поля незалежно від вхідного формату.
+
+---
+
+### Трансформатор даних (Transform)
+
+Розміщення: `internal/transform/`
+
+Тип `RemapTransform` виконує такі операції:
+
+- **Додавання полів** (`add_fields`): збагачення події довільними статичними або змінними-середовища значеннями (наприклад, `env`, `node`).
+- **Перетворення регістру** (`case`): приведення ключів полів до `camelCase`, `snake_case`, `UPPER_CASE`, `lower_case` тощо.
+
+Трансформатор реалізує інтерфейс:
+
+```go
+type Transformer interface {
+    Run(ctx context.Context, in <-chan event.Event, out chan<- event.Event) error
+}
+```
+
+---
+
+### Резолвер сервісів (Resolver)
+
+Розміщення: `internal/resolve/`
+
+Резолвер забезпечує відображення мережевих ідентифікаторів (IP-адреси, DNS-імена, ідентифікатори контейнерів) на логічні імена сервісів.
+
+Система резолверів побудована за шаблоном проектування **ланцюжок відповідальності** (Chain of Responsibility):
+
+```
+ChainResolver
+  ├── StaticResolver   ← статичні відображення та wildcard-патерни
+  ├── DockerResolver   ← ідентифікатори Docker-контейнерів → імена
+  └── CacheResolver    ← кешування результатів з TTL
+```
+
+| Компонент | Опис |
+|---|---|
+| `StaticResolver` | Точні відображення IP→сервіс та wildcard-патерни (`*.redis.svc` → `redis`) |
+| `DockerResolver` | Запити до Docker API для розпізнавання ідентифікаторів контейнерів |
+| `CacheResolver` | LRU-кеш з TTL для зменшення кількості повторних запитів |
+| `ChainResolver` | Послідовно опитує резолвери; повертає перший успішний результат |
+
+Інтерфейс резолвера:
+
+```go
+type Resolver interface {
+    Resolve(ctx context.Context, host string) (serviceName string, ok bool)
+}
+```
+
+---
+
+### Конвеєр обробки (Pipeline)
+
+Розміщення: `internal/pipeline/`
+
+`Pipeline` — центральний оркестратор, що координує роботу всіх компонентів:
+
+1. Запускає всі джерела в паралельних горутинах.
+2. Об'єднує їх виходи у єдиний канал подій (fan-in).
+3. Послідовно застосовує трансформатори.
+4. Виконує нормалізацію та збагачення через резолвер.
+5. Розподіляє нормалізовані події між споживачами (fan-out): sink, граф, метрики.
+6. Координує коректне завершення через `context.Context`.
+
+---
+
+### Граф залежностей (Graph)
+
+Розміщення: `internal/graph/`
+
+`CallGraph` — структура даних для побудови та аналізу орієнтованого зваженого графу міжсервісних залежностей у режимі реального часу.
+
+**Вузол графу** (`Node`) зберігає:
+- Ім'я сервісу
+- Часову мітку останнього звернення
+
+**Ребро графу** (`Edge`) зберігає:
+- `SrcService` — сервіс-ініціатор запиту
+- `DstService` — сервіс-одержувач
+- `CallCount` — загальна кількість звернень
+- `ErrorCount` — кількість помилкових звернень
+- `TotalLatencyMs` — сумарна затримка (для обчислення середньої)
+- `LatencyWindow` — ковзне вікно затримок для статистичного аналізу
+- Часову мітку останнього оновлення
+
+**Граф емітує такі події:**
+- `NewEdge` — виявлено нове ребро (нова залежність між сервісами)
+- `CycleDetected` — виявлено циклічну залежність
+- `StaleEdge` — ребро не оновлювалось більше заданого порогу часу
+
+**Виявлення циклів** реалізоване через обхід графу в глибину (DFS — Depth-First Search) при додаванні кожного нового ребра.
+
+---
+
+### Детектор аномалій (Anomaly Detector)
+
+Розміщення: `internal/anomaly/`
+
+`ZScoreDetector` реалізує статистичне виявлення аномалій у часових рядах на основі Z-оцінки з ковзним вікном.
+
+#### Алгоритм Z-оцінки для виявлення аномалій
+
+Для кожного ребра графу `(src, dst)` детектор веде незалежний статистичний облік за двома метриками:
+- **latency** — затримка виклику в мілісекундах
+- **error\_rate** — частка помилкових відповідей
+
+При надходженні нового значення `x` обчислюється Z-оцінка:
+
+```
+Z = (x - μ) / σ
+```
+
+де:
+- `μ` — поточне середнє значення в ковзному вікні
+- `σ` — стандартне відхилення в ковзному вікні
+
+Якщо `|Z| > threshold` (за замовчуванням `threshold = 3.0`), подія класифікується як аномалія.
+
+#### Онлайн-алгоритм Велфорда
+
+Для ефективного обчислення середнього та дисперсії без зберігання всього вікна значень реалізовано **алгоритм Велфорда** (Welford's online algorithm):
+
+```
+При додаванні нового значення x_n:
+  n    ← n + 1
+  δ    ← x_n - μ_{n-1}
+  μ_n  ← μ_{n-1} + δ / n
+  δ'   ← x_n - μ_n
+  M_n  ← M_{n-1} + δ × δ'
+
+  σ²   = M_n / (n - 1)   (вибіркова дисперсія, незміщена оцінка)
+```
+
+Алгоритм забезпечує чисельну стійкість та обчислювальну складність `O(1)` на кожне нове значення, що критично при обробці безперервних потоків даних.
+
+#### Параметри конфігурації детектора
+
+| Параметр | За замовчуванням | Опис |
+|---|---|---|
+| `Threshold` | 3.0 | Мінімальне значення Z-оцінки для класифікації аномалії |
+| `WindowSize` | 100 | Максимальний розмір ковзного вікна |
+| `MinSamples` | 10 | Мінімальна кількість спостережень до початку детекції |
+| `Cooldown` | 30s | Мінімальний інтервал між повторними сповіщеннями для одного ребра |
+
+---
+
+### Термінальний інтерфейс (TUI)
+
+Розміщення: `internal/tui/`
+
+TUI реалізований на основі фреймворку **Bubble Tea** (архітектура Elm: Model-Update-View) та надає інтерактивний термінальний інтерфейс для спостереження за станом системи в режимі реального часу.
+
+**Екрани:**
+
+| Екран | Клавіша | Зміст |
+|---|---|---|
+| **Service List** | `1` | Список усіх виявлених сервісів з можливістю фільтрації та сортування |
+| **Dependency View** | `2` або `Enter` | Деталізований вигляд залежностей обраного сервісу (upstream/downstream ребра) |
+| **Event Log** | `3` | Потік нормалізованих подій з можливістю перегляду сирого JSON |
+
+**Навігація:** `↑`/`↓` — вибір; `/` — фільтрація; `q` — вихід; `?` — довідка.
+
+---
+
+### Метрики (Prometheus Metrics)
+
+Розміщення: `internal/metrics/`
+
+Система експортує метрики у форматі Prometheus через HTTP-ендпоінт `GET /metrics` (порт `:2112` за замовчуванням).
+
+| Метрика | Тип | Мітки | Опис |
+|---|---|---|---|
+| `logshipper_events_received_total` | Counter | `source` | Загальна кількість отриманих подій за джерелом |
+| `logshipper_parse_total` | Counter | `format` | Кількість операцій розбору за форматом |
+| `logshipper_parse_errors_total` | Counter | — | Кількість помилок розбору |
+| `logshipper_graph_nodes` | Gauge | — | Поточна кількість вузлів графу |
+| `logshipper_graph_edges` | Gauge | — | Поточна кількість ребер графу |
+| `logshipper_graph_new_edges_total` | Counter | — | Кількість виявлених нових залежностей |
+| `logshipper_graph_cycles_total` | Counter | — | Кількість виявлених циклічних залежностей |
+| `logshipper_anomalies_total` | Counter | `metric` | Кількість виявлених аномалій за типом |
+| `logshipper_pipeline_processed_total` | Counter | — | Загальна кількість оброблених подій |
+| `logshipper_edge_calls_total` | Counter | `src`, `dst` | Кількість викликів між парою сервісів |
+| `logshipper_edge_errors_total` | Counter | `src`, `dst` | Кількість помилкових викликів між парою сервісів |
+| `logshipper_edge_latency_ms` | Histogram | `src`, `dst` | Розподіл затримок між парою сервісів (мс) |
+
+Межі гістограми затримок (bucket boundaries): 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000 мс.
+
+---
+
+## Моделі даних
+
+### Сира подія (`event.Event`)
+
+```go
+type Event struct {
+    Source    string            // ідентифікатор джерела
+    RawLine   string            // сирий рядок вводу
+    Timestamp time.Time         // час отримання
+    Attrs     map[string]string // додаткові атрибути з конфігурації
+}
+```
+
+### Нормалізована подія (`event.NormalizedEvent`)
+
+```go
+type NormalizedEvent struct {
+    Timestamp   time.Time
+    Level       string  // debug, info, warn, error
+    Message     string
+    SrcService  string  // сервіс-ініціатор
+    DstService  string  // сервіс-одержувач
+    Operation   string  // назва операції / ендпоінту
+    TraceID     string  // ідентифікатор трасування (W3C Trace Context / Jaeger)
+    SpanID      string  // ідентифікатор відрізку трасування
+    LatencyMs   float64 // затримка у мілісекундах
+    StatusCode  int     // HTTP-статус або код відповіді
+    Format      string  // визначений формат: json, ecs, plain, metric тощо
+    Raw         string  // оригінальний сирий рядок
+    Extra       map[string]string // додаткові поля
+}
+```
+
+---
+
+## Підтримувані формати журналів
+
+### JSON (стандартний)
+
+```json
+{
+  "timestamp": "2025-01-15T10:23:45.123Z",
+  "level": "info",
+  "service": "api-gw",
+  "dst_service": "auth",
+  "operation": "POST /auth/token",
+  "trace_id": "abc123",
+  "span_id": "def456",
+  "latency_ms": 42.5,
+  "status_code": 200
+}
+```
+
+### ECS (Elastic Common Schema)
+
+```json
+{
+  "@timestamp": "2025-01-15T10:23:45.123Z",
+  "log": { "level": "info" },
+  "service": { "name": "payment" },
+  "trace": { "id": "abc123" },
+  "span": { "id": "def456" },
+  "event": { "action": "charge", "duration": 42500000 },
+  "http": { "response": { "status_code": 200 } }
+}
+```
+
+### Metric JSON
+
+```json
+{
+  "metric": "cpu_usage",
+  "value": 87.3,
+  "service": "inventory",
+  "timestamp": "2025-01-15T10:23:45Z"
+}
+```
+
+### Plain Text
+
+```
+2025-01-15T10:23:45Z INFO [user-service] Processing request operation=get_user latency=12ms
+```
+
+---
+
+## Конфігурація системи
+
+Конфігурація задається у форматі YAML. Підтримується підстановка змінних середовища у форматі `${VAR_NAME}`.
+
+```yaml
+sources:
+  stdin_main:
+    type: "stdin"
+    service: "${SERVICE_NAME}"
+
+  app_logs:
+    type: "file"
+    path: "/var/log/app/app.log"
+    service: "${SERVICE_NAME}"
+
+  docker_app:
+    type: "docker"
+    container_id: "my_container"
+    service: "my-service"
+
+transforms:
+  enrich:
+    type: "remap-lite"
+    inputs: ["stdin_main", "app_logs", "docker_app"]
+    case: "camel"
+    add_fields:
+      env: "${APP_ENV}"
+      datacenter: "${DC_NAME}"
+
+sinks:
+  stdout_out:
+    type: "stdout"
+    inputs: ["enrich"]
+    pretty: false
+
+resolve:
+  static:
+    "10.0.0.5": "user-service"
+    "10.0.0.6": "payment-service"
+    "*.redis.svc": "redis"
+    "db.internal": "postgres"
+  docker: true
+  cache:
+    ttl: "30s"
+    max_size: 1000
+```
+
+### Параметри запуску
+
+| Прапор | За замовчуванням | Опис |
+|---|---|---|
+| `-c <path>` | `config.yml` | Шлях до файлу конфігурації |
+| `-tui` | `false` | Увімкнути термінальний інтерфейс |
+| `-metrics` | `false` | Увімкнути експорт метрик Prometheus |
+| `-metrics-addr` | `:2112` | Адреса HTTP-сервера метрик |
+
+---
+
+## Розгортання
+
+### Локальне розгортання (Docker Compose)
+
+Повний стек: система збору журналів + Prometheus + Grafana.
 
 ```bash
-echo "Application started successfully" | ./logshipper -source=local -service=init
-# Output: [CURRENT_TIME] [init] () Application started successfully
+docker-compose up --build
+```
+
+**Сервіси Docker Compose:**
+
+| Сервіс | Порт | Опис |
+|---|---|---|
+| `pipeline` | 2112 | Collector з генератором демо-даних |
+| `prometheus` | 9090 | Сервер Prometheus |
+| `grafana` | 3000 | Grafana (логін: `admin` / пароль: `admin`) |
+
+### Хмарне розгортання (Fly.io)
+
+Система розгортається у вигляді трьох незалежних застосунків на платформі Fly.io:
+
+```bash
+# Розгортання конвеєра збору журналів
+fly deploy
+
+# Розгортання Prometheus
+cd fly-prometheus && fly deploy
+
+# Розгортання Grafana
+cd fly-grafana && fly deploy
+```
+
+**Конфігурація Fly.io:**
+
+| Застосунок | Порт | Ресурси |
+|---|---|---|
+| `collector-pipeline` | 2112 | 1 shared CPU, 1 ГБ RAM |
+| `collector-prometheus` | 9090 | 1 shared CPU, 1 ГБ RAM |
+| `collector-grafana` | 3000 | 1 shared CPU, 1 ГБ RAM |
+
+---
+
+## Моніторинг та спостережуваність
+
+### Prometheus
+
+Конфігурація збирання метрик (`prometheus.yml`):
+
+```yaml
+scrape_configs:
+  - job_name: 'logshipper'
+    static_configs:
+      - targets: ['pipeline:2112']
+    scrape_interval: 15s
+```
+
+### Grafana
+
+Дашборд Grafana автоматично підключається до Prometheus та надає такі панелі:
+
+- **Events Rate** — частота вхідних подій за джерелами
+- **Parse Formats** — розподіл форматів журналів
+- **Graph Topology** — поточна кількість вузлів та ребер
+- **Edge Latency** — розподіл затримок між парами сервісів (гістограма)
+- **Error Rate** — частота помилок за парами сервісів
+- **Anomaly Events** — частота виявлення аномалій
+- **Cycle Detections** — виявлення циклічних залежностей
+
+---
+
+## Тестування
+
+### Юніт-тести
+
+```bash
+make test
+# або
+go test ./...
+```
+
+### Бенчмарки
+
+```bash
+make bench
+# або
+go test -bench=. -benchmem ./...
+```
+
+### Інтеграційні тести
+
+Інтеграційні тести використовують **Testcontainers for Go** (`github.com/testcontainers/testcontainers-go`) для запуску реальних Docker-контейнерів під час тестування, що забезпечує перевірку взаємодії з Docker API без використання mock-об'єктів.
+
+```bash
+go test -tags=integration ./...
+```
+
+### Демо-генератор синтетичних журналів
+
+Для тестування та демонстрації реалізований генератор синтетичних журналів (`cmd/demo/`), що симулює реалістичну мікросервісну топологію.
+
+**Змодельована топологія** (16 сервісів, 30 ребер):
+
+```
+api-gw → auth → user-service → db
+api-gw → payment → billing → db
+api-gw → inventory → redis
+api-gw → search → cache
+billing → notification → mailer
+payment → fraud-check
+```
+
+**Сценарії інцидентів**, що генеруються циклічно:
+
+| Інцидент | Цикл | Тривалість | Ефект |
+|---|---|---|---|
+| Payment DB Spike | 30 с | 12 с | +800 мс затримки, 35% помилок |
+| Billing Cascade | 30 с | 18 с | +600 мс, 28% помилок |
+| Auth Error Spike | 55 с | 20 с | ×3.5 затримки, 60% помилок |
+| Inventory Spike | 65 с | 25 с | +500 мс |
+| Mailer Timeout | 60 с | 20 с | +3000 мс, 45% помилок |
+| Search Overload | 80 с | 30 с | +700 мс, 30% помилок |
+
+**Розподіл форматів** у генераторі: 55% JSON, 25% ECS, 10% plain text, 10% metric.
+
+---
+
+## Стек технологій
+
+| Категорія | Технологія | Версія | Призначення |
+|---|---|---|---|
+| **Мова** | Go | 1.25 | Основна мова реалізації |
+| **TUI** | Bubble Tea | 1.3.10 | Термінальний UI (Elm-архітектура) |
+| **TUI** | Bubbles | 1.0.0 | Компоненти TUI (spinner тощо) |
+| **TUI** | Lipgloss | 1.1.0 | Стилізація термінального виводу |
+| **Метрики** | Prometheus Client | 1.23.2 | Експорт метрик |
+| **Моніторинг** | Prometheus | 2.53.0 | Збір та зберігання метрик |
+| **Моніторинг** | Grafana | 11.1.0 | Візуалізація метрик |
+| **Контейнери** | Docker SDK | 28.5.2 | Інтеграція з Docker API |
+| **Файли** | hpcloud/tail | 1.0.0 | Відстеження файлів (tail) |
+| **Конфіг** | gopkg.in/yaml.v3 | — | Розбір YAML-конфігурації |
+| **Env** | godotenv | — | Завантаження .env файлів |
+| **Тести** | Testcontainers | 0.41.0 | Інтеграційні тести з Docker |
+| **Розгортання** | Docker / Compose | — | Контейнеризація |
+| **Розгортання** | Fly.io | — | Хмарна платформа |
+
+---
+
+## Структура репозиторію
+
+```
+collector/
+├── cmd/
+│   ├── collector/
+│   │   └── main.go          # Точка входу; обробка прапорів CLI
+│   └── demo/
+│       └── main.go          # Генератор синтетичних журналів
+│
+├── internal/
+│   ├── app/
+│   │   └── app.go           # Оркестратор застосунку (нормальний / TUI / метрики режими)
+│   ├── anomaly/
+│   │   └── detector.go      # Z-score детектор аномалій (алгоритм Велфорда)
+│   ├── config/
+│   │   └── config.go        # Схема YAML-конфігурації
+│   ├── event/
+│   │   └── event.go         # Типи Event та NormalizedEvent
+│   ├── graph/
+│   │   └── graph.go         # CallGraph: побудова та аналіз графу залежностей
+│   ├── metrics/
+│   │   └── metrics.go       # Prometheus лічильники, вимірювачі, гістограми
+│   ├── parse/
+│   │   ├── parse.go         # Диспетчер визначення формату
+│   │   ├── json.go          # JSON-парсер
+│   │   ├── ecs.go           # ECS-парсер
+│   │   └── ...              # Інші парсери
+│   ├── pipeline/
+│   │   └── pipeline.go      # Оркестрація конвеєру (fan-in / fan-out)
+│   ├── resolve/
+│   │   ├── static.go        # Статичні відображення + wildcard
+│   │   ├── docker.go        # Docker API резолвер
+│   │   ├── cache.go         # LRU-кеш з TTL
+│   │   └── chain.go         # Ланцюжок резолверів
+│   ├── sinks/
+│   │   └── stdout.go        # Stdout sink (JSON-вивід)
+│   ├── sources/
+│   │   ├── stdin.go         # Stdin джерело
+│   │   ├── file.go          # File джерело
+│   │   └── docker.go        # Docker джерело
+│   ├── transform/
+│   │   └── remap.go         # RemapTransform
+│   └── tui/
+│       └── model.go         # Bubble Tea модель TUI
+│
+├── fly-grafana/
+│   ├── fly.toml             # Fly.io конфіг Grafana
+│   ├── grafana.ini          # Налаштування Grafana
+│   ├── provisioning/        # Авто-провіжн datasource та dashboards
+│   └── dashboards/
+│       └── pipeline.json    # JSON-дашборд Grafana
+│
+├── fly-prometheus/
+│   ├── fly.toml             # Fly.io конфіг Prometheus
+│   └── prometheus.yml       # Конфіг збирання метрик
+│
+├── config.yml               # Приклад конфігурації (multi-source)
+├── config-metrics.yml       # Конфігурація для режиму метрик
+├── config-tui.yml           # Конфігурація для режиму TUI
+├── docker-compose.yml       # Повний локальний стек
+├── Dockerfile               # Multi-stage збірка (Go 1.25 → Alpine)
+├── fly.toml                 # Fly.io конфіг конвеєру
+├── Makefile                 # Цілі збірки (build, run, test, bench)
+├── prometheus.yml           # Конфіг Prometheus для Docker Compose
+└── go.mod / go.sum          # Go-модулі
+```
+
+---
+
+## Запуск та використання
+
+### Передумови
+
+- Go 1.25+
+- Docker та Docker Compose (для повного стеку)
+- Make
+
+### Збірка
+
+```bash
+# Збірка бінарного файлу collector
+make build
+
+# Збірка обох бінарних файлів (collector + demo)
+go build -o bin/collector ./cmd/collector
+go build -o bin/demo ./cmd/demo
+```
+
+### Запуск у різних режимах
+
+```bash
+# Стандартний режим (stdin → нормалізований JSON stdout)
+make run
+
+# Режим TUI (інтерактивний термінальний інтерфейс)
+make run-tui
+
+# Режим метрик (експорт Prometheus на :2112)
+./bin/collector -c config-metrics.yml -metrics
+
+# Демо: синтетичні журнали → збір → метрики
+./bin/demo | ./bin/collector -c config-metrics.yml -metrics
+
+# Повний стек (Docker Compose)
+docker-compose up --build
+```
+
+### Приклад ручного введення
+
+```bash
+echo '{"timestamp":"2025-01-15T10:00:00Z","level":"info","service":"api-gw","dst_service":"auth","operation":"POST /login","latency_ms":45,"status_code":200}' \
+  | ./bin/collector -c config.yml
+```
+
+---
+

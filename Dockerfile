@@ -20,3 +20,5 @@ COPY --from=builder /app/collector .
 COPY --from=builder /app/demo .
 COPY config.yml .
 COPY config-metrics.yml .
+
+CMD sh -c "/app/demo | /app/collector -c /app/config-metrics.yml -metrics -metrics-addr :2112"
