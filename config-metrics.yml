@@ -3,6 +3,12 @@ sources:
     type: "stdin"
     service: "demo"
 
+anomaly:
+  window_size: 50
+  threshold: 2.0
+  min_samples: 20
+  cooldown: 10s
+
 sinks:
   stdout_out:
     type: "stdout"

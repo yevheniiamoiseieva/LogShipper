@@ -21,6 +21,7 @@ type Model struct {
 	graph    *graph.CallGraph
 	detector *anomaly.ZScoreDetector
 	cancel   context.CancelFunc
+	eventCh  <-chan *event.NormalizedEvent
 
 	screen  Screen
 	screen1 Screen1
@@ -43,7 +44,7 @@ type Model struct {
 	lastSnapshot graph.CallGraphSnapshot
 }
 
-func New(g *graph.CallGraph, det *anomaly.ZScoreDetector, cancel context.CancelFunc) Model {
+func New(g *graph.CallGraph, det *anomaly.ZScoreDetector, cancel context.CancelFunc, eventCh <-chan *event.NormalizedEvent) Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -51,6 +52,7 @@ func New(g *graph.CallGraph, det *anomaly.ZScoreDetector, cancel context.CancelF
 		graph:         g,
 		detector:      det,
 		cancel:        cancel,
+		eventCh:       eventCh,
 		screen:        ScreenServiceList,
 		screen1:       NewScreen1(),
 		screen2:       NewScreen2(),
@@ -70,6 +72,7 @@ func (m Model) Init() tea.Cmd {
 		m.spinner.Tick,
 		listenGraphEvents(m.graph),
 		listenAnomalyEvents(m.detector),
+		listenNormalizedEvents(m.eventCh),
 	)
 }
 
@@ -155,11 +158,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AnomalyMsg:
 		ev := msg.Event
-		m.anomalyCounts[ev.EdgeKey]++
 		m.totalAnomalies++
 		parts := strings.SplitN(ev.EdgeKey, "|", 3)
 		if len(parts) >= 1 {
-			m.newAlerts[parts[0]] = true
+			svc := parts[0]
+			m.anomalyCounts[svc]++
+			m.newAlerts[svc] = true
 		}
 		m.anomalyEdges[ev.EdgeKey] = true
 		cmds = append(cmds, listenAnomalyEvents(m.detector))
@@ -173,8 +177,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, listenGraphEvents(m.graph))
 
-	case event.NormalizedEvent:
-		m.screen3.AddEvent(&msg)
+	case *event.NormalizedEvent:
+		m.screen3.AddEvent(msg)
+		cmds = append(cmds, listenNormalizedEvents(m.eventCh))
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -355,6 +360,16 @@ func listenAnomalyEvents(det *anomaly.ZScoreDetector) tea.Cmd {
 	return func() tea.Msg {
 		ev := <-det.Events()
 		return AnomalyMsg{Event: ev}
+	}
+}
+
+func listenNormalizedEvents(ch <-chan *event.NormalizedEvent) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ev := <-ch
+		return ev
 	}
 }
 

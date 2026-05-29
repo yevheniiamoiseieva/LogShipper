@@ -59,10 +59,11 @@ func (a *App) RunWithTUI(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	g.Start(ctx)
 
-	m := tui.New(g, det, cancel)
+	eventCh := make(chan *event.NormalizedEvent, 512)
+	m := tui.New(g, det, cancel, eventCh)
 	prog := tea.NewProgram(m, tea.WithAltScreen())
 
-	sink := &graphSink{graph: g, processed: func() { metrics.PipelineProcessed.Inc() }}
+	sink := &graphSink{graph: g, eventCh: eventCh, processed: func() { metrics.PipelineProcessed.Inc() }}
 
 	p, err := a.buildPipelineWithSink(sink)
 	if err != nil {
@@ -122,6 +123,7 @@ func (a *App) RunMetrics(ctx context.Context, addr string) error {
 
 type graphSink struct {
 	graph     *graph.CallGraph
+	eventCh   chan<- *event.NormalizedEvent
 	processed func()
 }
 
@@ -146,6 +148,12 @@ func (s *graphSink) Run(ctx context.Context, in <-chan *event.NormalizedEvent) e
 					Latency:    ev.Latency,
 					OccurredAt: ev.Timestamp,
 				})
+				if s.eventCh != nil {
+					select {
+					case s.eventCh <- ev:
+					default:
+					}
+				}
 			}
 		}
 	}
