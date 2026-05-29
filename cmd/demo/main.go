@@ -76,63 +76,63 @@ var (
 
 func cascadeIncidentLoop() {
 	for {
-		time.Sleep(30 * time.Second)
+		time.Sleep(15 * time.Second)
 		paymentDBSpike.Store(1)
-		time.Sleep(12 * time.Second)
-		billingCascade.Store(1)
-		time.Sleep(18 * time.Second)
-		paymentDBSpike.Store(0)
 		time.Sleep(8 * time.Second)
+		billingCascade.Store(1)
+		time.Sleep(10 * time.Second)
+		paymentDBSpike.Store(0)
+		time.Sleep(5 * time.Second)
 		billingCascade.Store(0)
 	}
 }
 
 func authIncidentLoop() {
-	time.Sleep(15 * time.Second)
+	time.Sleep(8 * time.Second)
 	for {
-		time.Sleep(55 * time.Second)
+		time.Sleep(25 * time.Second)
 		authErrSpike.Store(1)
-		time.Sleep(20 * time.Second)
+		time.Sleep(12 * time.Second)
 		authErrSpike.Store(0)
 	}
 }
 
 func inventoryIncidentLoop() {
-	time.Sleep(20 * time.Second)
+	time.Sleep(10 * time.Second)
 	for {
-		time.Sleep(65 * time.Second)
+		time.Sleep(30 * time.Second)
 		inventorySpike.Store(1)
-		time.Sleep(25 * time.Second)
+		time.Sleep(14 * time.Second)
 		inventorySpike.Store(0)
 	}
 }
 
 func cycleIncidentLoop() {
-	time.Sleep(35 * time.Second)
+	time.Sleep(18 * time.Second)
 	for {
-		time.Sleep(75 * time.Second)
+		time.Sleep(35 * time.Second)
 		cycleActive.Store(1)
-		time.Sleep(15 * time.Second)
+		time.Sleep(10 * time.Second)
 		cycleActive.Store(0)
 	}
 }
 
 func mailerIncidentLoop() {
-	time.Sleep(25 * time.Second)
+	time.Sleep(12 * time.Second)
 	for {
-		time.Sleep(60 * time.Second)
+		time.Sleep(28 * time.Second)
 		mailerSpike.Store(1)
-		time.Sleep(20 * time.Second)
+		time.Sleep(12 * time.Second)
 		mailerSpike.Store(0)
 	}
 }
 
 func searchIncidentLoop() {
-	time.Sleep(40 * time.Second)
+	time.Sleep(20 * time.Second)
 	for {
-		time.Sleep(80 * time.Second)
+		time.Sleep(38 * time.Second)
 		searchOverload.Store(1)
-		time.Sleep(30 * time.Second)
+		time.Sleep(16 * time.Second)
 		searchOverload.Store(0)
 	}
 }
@@ -337,7 +337,15 @@ func worker(id int) {
 		}
 		mu.Unlock()
 
-		time.Sleep(5 * time.Millisecond)
+		// random micro-sleep creates visible throughput waves on graphs
+		switch rng.Intn(10) {
+		case 0:
+			time.Sleep(20 * time.Millisecond)
+		case 1, 2:
+			// no sleep — burst
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 }
 
@@ -363,7 +371,7 @@ func main() {
 	go flushLoop()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 24; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()

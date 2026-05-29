@@ -1,16 +1,16 @@
 {
   "uid": "logshipper-pipeline",
   "title": "LogShipper Pipeline",
-  "description": "End-to-end observability: log collection \u2192 parsing \u2192 graph \u2192 anomaly detection",
+  "description": "End-to-end observability: log collection → parsing → graph → anomaly detection",
   "tags": [
     "logshipper",
     "diploma"
   ],
   "schemaVersion": 39,
   "version": 4,
-  "refresh": "5s",
+  "refresh": "2s",
   "time": {
-    "from": "now-10m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
@@ -48,13 +48,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_pipeline_processed_total[30s])",
+          "expr": "rate(logshipper_pipeline_processed_total[15s])",
           "legendFormat": "events/s",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -66,7 +66,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#00E5FF",
                 "value": null
               }
             ]
@@ -113,7 +113,7 @@
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -125,7 +125,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "purple",
+                "color": "#B877D9",
                 "value": null
               }
             ]
@@ -172,7 +172,7 @@
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -184,7 +184,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "#5794F2",
                 "value": null
               }
             ]
@@ -225,13 +225,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(logshipper_anomalies_total[5m])",
+          "expr": "increase(logshipper_anomalies_total[2m])",
           "legendFormat": "anomalies",
           "range": false,
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -243,15 +243,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#1FC2A7",
                 "value": null
               },
               {
-                "color": "yellow",
+                "color": "#FADE2A",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "#F2495C",
                 "value": 5
               }
             ]
@@ -298,7 +298,7 @@
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -310,15 +310,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#1FC2A7",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#FF9830",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "#F2495C",
                 "value": 5
               }
             ]
@@ -359,13 +359,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(logshipper_parse_total[1m])) / (sum(rate(logshipper_parse_total[1m])) + rate(logshipper_parse_errors_total[1m]))",
+          "expr": "sum(rate(logshipper_parse_total[30s])) / (sum(rate(logshipper_parse_total[30s])) + rate(logshipper_parse_errors_total[30s]))",
           "legendFormat": "success rate",
           "range": false,
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -377,15 +377,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#F2495C",
                 "value": null
               },
               {
-                "color": "yellow",
+                "color": "#FADE2A",
                 "value": 0.85
               },
               {
-                "color": "green",
+                "color": "#1FC2A7",
                 "value": 0.97
               }
             ]
@@ -437,13 +437,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_pipeline_processed_total[30s])",
+          "expr": "rate(logshipper_pipeline_processed_total[15s])",
           "legendFormat": "events/s",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -452,20 +452,37 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 15,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 38,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "events/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#00E5FF",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -497,13 +514,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (format)(increase(logshipper_parse_total[5m]))",
+          "expr": "sum by (format)(increase(logshipper_parse_total[2m]))",
           "legendFormat": "{{format}}",
           "range": false,
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -561,13 +578,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_parse_total[30s])",
+          "expr": "rate(logshipper_parse_total[15s])",
           "legendFormat": "{{format}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -576,16 +593,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -621,13 +639,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_parse_errors_total[30s])",
+          "expr": "rate(logshipper_parse_errors_total[15s])",
           "legendFormat": "parse errors/s",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -636,16 +654,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 5,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 20,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short",
           "thresholds": {
@@ -694,13 +713,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (format)(rate(logshipper_parse_total[30s]))",
+          "expr": "sum by (format)(rate(logshipper_parse_total[15s]))",
           "legendFormat": "{{format}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -709,16 +728,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "value",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -772,7 +792,7 @@
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         },
         {
           "datasource": {
@@ -785,7 +805,7 @@
           "instant": false,
           "editorMode": "code",
           "refId": "B",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -794,20 +814,52 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Nodes"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Edges"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#5794F2",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -839,13 +891,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_graph_new_edges_total[1m])",
+          "expr": "rate(logshipper_graph_new_edges_total[30s])",
           "legendFormat": "new edges/s",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -854,20 +906,37 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "new edges/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF6B9D",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -899,13 +968,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(8, rate(logshipper_edge_calls_total[30s]))",
-          "legendFormat": "{{src}} \u2192 {{dst}}",
+          "expr": "topk(8, rate(logshipper_edge_calls_total[15s]))",
+          "legendFormat": "{{src}} → {{dst}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -914,16 +983,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -965,7 +1035,7 @@
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -977,7 +1047,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "#5794F2",
                 "value": null
               }
             ]
@@ -1024,7 +1094,7 @@
           "instant": true,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1036,15 +1106,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#1FC2A7",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#FF9830",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "#F2495C",
                 "value": 5
               }
             ]
@@ -1080,7 +1150,7 @@
     {
       "type": "timeseries",
       "id": 22,
-      "title": "P95 Latency \u2014 Top Edges (ms)",
+      "title": "P95 Latency — Top Edges (ms)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1097,13 +1167,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(6, histogram_quantile(0.95, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[30s]))))",
-          "legendFormat": "{{src}} \u2192 {{dst}} p95",
+          "expr": "topk(6, histogram_quantile(0.95, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[15s]))))",
+          "legendFormat": "{{src}} → {{dst}} p95",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1112,16 +1182,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "ms"
         },
@@ -1140,7 +1211,7 @@
     {
       "type": "timeseries",
       "id": 23,
-      "title": "P50 Latency \u2014 Top Edges (ms)",
+      "title": "P50 Latency — Top Edges (ms)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1157,13 +1228,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(6, histogram_quantile(0.50, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[30s]))))",
-          "legendFormat": "{{src}} \u2192 {{dst}} p50",
+          "expr": "topk(6, histogram_quantile(0.50, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[15s]))))",
+          "legendFormat": "{{src}} → {{dst}} p50",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1172,16 +1243,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "ms"
         },
@@ -1217,13 +1289,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(8, rate(logshipper_edge_errors_total[30s]) / rate(logshipper_edge_calls_total[30s]))",
-          "legendFormat": "{{src}} \u2192 {{dst}}",
+          "expr": "topk(8, rate(logshipper_edge_errors_total[15s]) / rate(logshipper_edge_calls_total[15s]))",
+          "legendFormat": "{{src}} → {{dst}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1232,16 +1304,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "percentunit"
         },
@@ -1277,13 +1350,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (src,dst)(rate(logshipper_edge_errors_total[30s]))",
-          "legendFormat": "{{src}} \u2192 {{dst}}",
+          "expr": "sum by (src,dst)(rate(logshipper_edge_errors_total[15s]))",
+          "legendFormat": "{{src}} → {{dst}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1292,16 +1365,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "value",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -1349,13 +1423,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_anomalies_total[1m])",
+          "expr": "rate(logshipper_anomalies_total[30s])",
           "legendFormat": "{{metric}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1364,16 +1438,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -1446,7 +1521,7 @@
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         },
         {
           "datasource": {
@@ -1459,7 +1534,7 @@
           "instant": false,
           "editorMode": "code",
           "refId": "B",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1468,20 +1543,52 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latency"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#F2495C",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error_rate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF9830",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1496,7 +1603,7 @@
     {
       "type": "timeseries",
       "id": 29,
-      "title": "P95 Latency \u2014 All Edges (anomaly context)",
+      "title": "P95 Latency — All Edges (anomaly context)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1513,13 +1620,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[30s])))",
-          "legendFormat": "{{src}} \u2192 {{dst}}",
+          "expr": "histogram_quantile(0.95, sum by (src,dst,le)(rate(logshipper_edge_latency_ms_bucket[15s])))",
+          "legendFormat": "{{src}} → {{dst}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1528,16 +1635,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 5,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 20,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "ms"
         },
@@ -1585,13 +1693,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(logshipper_pipeline_processed_total[30s])",
+          "expr": "rate(logshipper_pipeline_processed_total[15s])",
           "legendFormat": "processed/s",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1600,20 +1708,37 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 20,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 45,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "processed/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#00E5FF",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1645,13 +1770,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (dst)(rate(logshipper_edge_calls_total[30s]))",
-          "legendFormat": "\u2192 {{dst}}",
+          "expr": "sum by (dst)(rate(logshipper_edge_calls_total[15s]))",
+          "legendFormat": "→ {{dst}}",
           "range": true,
           "instant": false,
           "editorMode": "code",
           "refId": "A",
-          "interval": "10s"
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1660,16 +1785,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
+            "fillOpacity": 28,
+            "lineWidth": 3,
+            "showPoints": "auto",
             "spanNulls": true,
             "drawStyle": "line",
-            "gradientMode": "opacity",
+            "gradientMode": "scheme",
             "stacking": {
               "mode": "value",
               "group": "A"
-            }
+            },
+            "pointSize": 4
           },
           "unit": "short"
         },
@@ -1695,6 +1821,6 @@
   "links": [],
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "liveNow": false,
+  "liveNow": true,
   "weekStart": ""
 }
